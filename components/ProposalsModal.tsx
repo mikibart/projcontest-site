@@ -45,7 +45,7 @@ export const ProposalsModal: React.FC<ProposalsModalProps> = ({
   const fetchProposals = async () => {
     setLoading(true);
     setError(null);
-    const { data, error } = await apiFetch<{ proposals: Proposal[] }>(`/contests/${contestId}/proposals`);
+    const { data, error } = await apiFetch<{ proposals: Proposal[] }>(`/proposals?contestId=${contestId}`);
     if (error) {
       setError(error);
     } else if (data) {
@@ -58,7 +58,7 @@ export const ProposalsModal: React.FC<ProposalsModalProps> = ({
     setSelecting(proposalId);
     setError(null);
 
-    const { data, error } = await apiFetch<any>(`/contests/${contestId}/proposals/${proposalId}/winner`, {
+    const { data, error } = await apiFetch<any>(`/proposals?proposalId=${proposalId}&action=winner`, {
       method: 'PUT',
     });
 

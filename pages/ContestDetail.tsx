@@ -77,12 +77,11 @@ export const ContestDetail: React.FC<ContestDetailProps> = ({ id, onBack, onLogi
     setSubmittingProposal(true);
     setProposalError(null);
 
-    const { data, error } = await apiFetch<any>(`/contests/${id}/proposals`, {
+    const { data, error } = await apiFetch<any>('/proposals', {
       method: 'POST',
       body: JSON.stringify({
+        contestId: id,
         description: proposalDescription,
-        images: [],
-        files: [],
       }),
     });
 
