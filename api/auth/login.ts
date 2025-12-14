@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import prisma from '../_lib/prisma.js';
-import { verifyPassword, generateAccessToken, generateRefreshToken } from '../_lib/auth.js';
+import prisma from '../_lib/prisma';
+import { verifyPassword, generateAccessToken, generateRefreshToken } from '../_lib/auth';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -54,8 +54,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       accessToken,
       refreshToken,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({
+      error: 'Internal server error',
+      details: process.env.NODE_ENV !== 'production' ? error.message : undefined
+    });
   }
 }
