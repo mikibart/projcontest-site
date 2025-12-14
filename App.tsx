@@ -152,7 +152,7 @@ const App: React.FC = () => {
         {currentPage === 'CONTEST_DETAIL' && selectedContestId && (
           <ContestDetail id={selectedContestId} onBack={() => handleNavigate('EXPLORE')} />
         )}
-        {currentPage === 'DASHBOARD' && <Dashboard />}
+        {currentPage === 'DASHBOARD' && <Dashboard onLoginClick={() => setIsLoginModalOpen(true)} />}
         {currentPage === 'HOW_IT_WORKS' && <HowItWorks onNavigate={handleNavigate} />}
         {currentPage === 'PRACTICES' && <Practices onNavigate={handleNavigate} />}
         {currentPage === 'PRACTICE_WIZARD' && (
