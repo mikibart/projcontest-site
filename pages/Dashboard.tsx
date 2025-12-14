@@ -122,10 +122,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onLoginClick }) => {
   }
 
   const isArchitect = user?.role === 'ARCHITECT';
+  const isEngineer = user?.role === 'ENGINEER';
 
   // Architect Dashboard
   if (isArchitect) {
     return <ArchitectDashboard data={dashboardData} user={user} />;
+  }
+
+  // Engineer Dashboard
+  if (isEngineer) {
+    return <EngineerDashboard data={dashboardData} user={user} />;
   }
 
   // Client Dashboard
@@ -284,6 +290,190 @@ const ArchitectDashboard: React.FC<{ data: any; user: any }> = ({ data, user }) 
                 </AreaChart>
               </ResponsiveContainer>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== ENGINEER DASHBOARD ====================
+const EngineerDashboard: React.FC<{ data: any; user: any }> = ({ data, user }) => {
+  const [availableRequests, setAvailableRequests] = useState<any[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+
+  const assignedRequests = data?.assignedPractices || [];
+  const stats = data?.stats || {};
+
+  useEffect(() => {
+    fetchAvailableRequests();
+  }, []);
+
+  const fetchAvailableRequests = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch('/api/practices/requests?available=true', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableRequests(data.requests || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const handleClaimRequest = async (requestId: string) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const res = await fetch(`/api/practices/requests/${requestId}/claim`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (res.ok) {
+        // Refresh data
+        fetchAvailableRequests();
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="bg-gray-50 min-h-screen">
+      <div className="container mx-auto px-4 md:px-6 py-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-display font-bold text-neutral-text">
+            Ciao, {user.name}!
+          </h1>
+          <p className="text-neutral-muted">
+            Gestisci le pratiche edilizie assegnate e trova nuovi incarichi.
+          </p>
+        </header>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <StatCard
+            icon={<FileText size={20} />}
+            iconBg="bg-blue-50"
+            iconColor="text-primary"
+            value={stats.totalAssigned || assignedRequests.length}
+            label="Pratiche assegnate"
+          />
+          <StatCard
+            icon={<Clock size={20} />}
+            iconBg="bg-yellow-50"
+            iconColor="text-yellow-600"
+            value={assignedRequests.filter((p: any) => p.status === 'IN_PROGRESS').length}
+            label="In lavorazione"
+          />
+          <StatCard
+            icon={<CheckCircle2 size={20} />}
+            iconBg="bg-green-50"
+            iconColor="text-green-600"
+            value={stats.completedPractices || 0}
+            label="Completate"
+          />
+          <StatCard
+            icon={<TrendingUp size={20} />}
+            iconBg="bg-purple-50"
+            iconColor="text-purple-600"
+            value={`€${(stats.totalEarnings || 0).toLocaleString()}`}
+            label="Guadagni totali"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Available Requests */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-green-50 to-transparent">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Sparkles className="text-green-600" size={20} />
+                Richieste Disponibili
+              </h3>
+              <p className="text-sm text-neutral-muted mt-1">Nuovi incarichi da acquisire</p>
+            </div>
+            {loadingRequests ? (
+              <div className="p-8 text-center">
+                <Loader2 className="animate-spin mx-auto text-primary" size={24} />
+              </div>
+            ) : availableRequests.length === 0 ? (
+              <div className="p-8 text-center text-neutral-muted">
+                <HardHat size={40} className="mx-auto mb-4 opacity-30" />
+                <p>Nessuna richiesta disponibile al momento.</p>
+                <p className="text-sm mt-2">Controlla più tardi!</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                {availableRequests.map((request: any) => (
+                  <div key={request.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-medium text-neutral-text">{request.type}</h4>
+                        <p className="text-xs text-neutral-muted">{request.address}</p>
+                      </div>
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                        Disponibile
+                      </span>
+                    </div>
+                    <p className="text-sm text-neutral-muted mb-3 line-clamp-2">
+                      {request.description}
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => handleClaimRequest(request.id)}
+                    >
+                      Accetta Incarico
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assigned Requests */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <h3 className="font-bold text-lg">Le tue Pratiche</h3>
+              <p className="text-sm text-neutral-muted mt-1">Incarichi assegnati a te</p>
+            </div>
+            {assignedRequests.length === 0 ? (
+              <div className="p-8 text-center text-neutral-muted">
+                <FileText size={40} className="mx-auto mb-4 opacity-30" />
+                <p>Non hai pratiche assegnate.</p>
+                <p className="text-sm mt-2">Accetta un incarico dalla lista!</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                {assignedRequests.map((practice: any) => (
+                  <div key={practice.id} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-medium text-neutral-text">{practice.type}</h4>
+                        <p className="text-xs text-neutral-muted">{practice.address}</p>
+                      </div>
+                      <PracticeStatusBadge status={practice.status} />
+                    </div>
+                    <p className="text-sm text-neutral-muted mb-3 line-clamp-2">
+                      {practice.description}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm">Dettagli</Button>
+                      {practice.status === 'IN_PROGRESS' && (
+                        <Button size="sm">Completa</Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

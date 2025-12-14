@@ -160,15 +160,18 @@ const App: React.FC = () => {
         {currentPage === 'HOME' && <Home onNavigate={handleNavigate} onContestClick={handleContestClick} />}
         {currentPage === 'EXPLORE' && <Explore onContestClick={handleContestClick} />}
         {currentPage === 'CONTEST_DETAIL' && selectedContestId && (
-          <ContestDetail id={selectedContestId} onBack={() => handleNavigate('EXPLORE')} />
+          <ContestDetail
+            id={selectedContestId}
+            onBack={() => handleNavigate('EXPLORE')}
+            onLoginRequired={() => setIsLoginModalOpen(true)}
+          />
         )}
         {currentPage === 'DASHBOARD' && <Dashboard onLoginClick={() => setIsLoginModalOpen(true)} />}
         {currentPage === 'HOW_IT_WORKS' && <HowItWorks onNavigate={handleNavigate} />}
         {currentPage === 'PRACTICES' && <Practices onNavigate={handleNavigate} />}
         {currentPage === 'PRACTICE_WIZARD' && (
-          <PracticeWizard 
+          <PracticeWizard
              onComplete={() => {
-                alert("Richiesta preventivo inviata! Sarai contattato entro 24h.");
                 handleNavigate('DASHBOARD');
              }}
              onCancel={() => handleNavigate('PRACTICES')}
@@ -177,10 +180,10 @@ const App: React.FC = () => {
         {currentPage === 'LAUNCH_WIZARD' && (
           <LaunchWizard
             onComplete={() => {
-              alert('Concorso Pubblicato! Reindirizzamento alla dashboard...');
-              handleNavigate('HOME');
+              handleNavigate('DASHBOARD');
             }}
             onCancel={() => handleNavigate('HOME')}
+            onLoginRequired={() => setIsLoginModalOpen(true)}
           />
         )}
         {currentPage === 'ADMIN' && (

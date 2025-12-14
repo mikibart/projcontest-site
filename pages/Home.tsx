@@ -1,27 +1,105 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
 import { ContestCard } from '../components/ContestCard';
-import { MOCK_CONTESTS } from '../constants';
-import { ArrowRight, Star, ArrowDown, Layers, PenTool, HardHat, FileText, Activity } from 'lucide-react';
-import { Page } from '../types';
+import { ArrowRight, Star, ArrowDown, Layers, PenTool, HardHat, FileText, Activity, Loader2 } from 'lucide-react';
+import { Page, Contest, Category, ContestStatus } from '../types';
 
 interface HomeProps {
   onNavigate: (page: Page) => void;
   onContestClick: (id: string) => void;
 }
 
+interface ApiContest {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  category: string;
+  budget: number;
+  deadline: string;
+  status: string;
+  imageUrl: string | null;
+  isFeatured: boolean;
+  proposalsCount?: number;
+  _count?: { proposals: number };
+}
+
+function mapApiContestToContest(c: ApiContest): Contest {
+  const deadline = new Date(c.deadline);
+  const now = new Date();
+  const daysRemaining = Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+
+  const categoryMap: Record<string, Category> = {
+    'RESIDENTIAL': Category.RESIDENTIAL,
+    'COMMERCIAL': Category.COMMERCIAL,
+    'INTERIOR': Category.INTERIOR,
+    'URBAN': Category.URBAN,
+    'CONCEPT': Category.CONCEPT,
+  };
+
+  const statusMap: Record<string, ContestStatus> = {
+    'OPEN': ContestStatus.OPEN,
+    'EVALUATING': ContestStatus.EVALUATING,
+    'CLOSED': ContestStatus.CLOSED,
+  };
+
+  return {
+    id: c.id,
+    title: c.title,
+    location: c.location,
+    category: categoryMap[c.category] || Category.RESIDENTIAL,
+    budget: c.budget,
+    proposalsCount: c.proposalsCount || c._count?.proposals || 0,
+    deadline: c.deadline,
+    daysRemaining,
+    status: statusMap[c.status] || ContestStatus.OPEN,
+    imageUrl: c.imageUrl || `https://picsum.photos/seed/${c.id}/800/600`,
+    description: c.description,
+    isFeatured: c.isFeatured,
+  };
+}
+
 export const Home: React.FC<HomeProps> = ({ onNavigate, onContestClick }) => {
+  const [contests, setContests] = useState<Contest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchContests();
+  }, []);
+
+  const fetchContests = async () => {
+    try {
+      const res = await fetch('/api/contests?featured=true&limit=5');
+      if (!res.ok) throw new Error('Error');
+      const data = await res.json();
+      const mappedContests = (data.contests || data).map(mapApiContestToContest);
+      setContests(mappedContests);
+    } catch {
+      // Fallback: try without featured filter
+      try {
+        const res = await fetch('/api/contests?limit=5');
+        if (res.ok) {
+          const data = await res.json();
+          const mappedContests = (data.contests || data).map(mapApiContestToContest);
+          setContests(mappedContests);
+        }
+      } catch {}
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="animate-fade-in overflow-hidden">
-      
+
       {/* SECTION 1: HYBRID HERO */}
       <section className="relative min-h-[90vh] flex flex-col justify-center bg-neutral-bg">
         {/* Background Grid */}
         <div className="absolute inset-0 bg-grid opacity-100 z-0 pointer-events-none" />
-        
+
         <div className="container mx-auto px-4 md:px-6 relative z-10 pt-10">
           <div className="max-w-6xl mx-auto text-center md:text-left">
-            
+
             {/* Super Headline */}
             <h1 className="font-display text-5xl md:text-8xl lg:text-[7rem] leading-[0.9] text-primary tracking-tight mb-8">
               Design. Permit. <br/>
@@ -35,7 +113,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, onContestClick }) => {
                  <p className="text-lg md:text-xl text-neutral-text font-serif leading-relaxed mb-8">
                    La prima piattaforma che unisce la creatività dei <strong>Concorsi di Architettura</strong> con la concretezza di uno <strong>Studio di Ingegneria Digitale</strong>. Dal concept alla CILA, in un unico flusso.
                  </p>
-                 
+
                  {/* Dual CTA */}
                  <div className="flex flex-col sm:flex-row gap-4">
                    <Button withArrow onClick={() => onNavigate('LAUNCH_WIZARD')} className="flex-1">
@@ -145,31 +223,49 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, onContestClick }) => {
            <Button variant="outline" size="sm" onClick={() => onNavigate('EXPLORE')}>Vedi Tutti</Button>
          </div>
 
-         {/* Asymmetrical Grid */}
+         {/* Contest Grid */}
          <div className="container mx-auto px-4 md:px-6">
-           <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-             {/* Big Feature */}
-             <div className="md:col-span-8">
-                <ContestCard contest={MOCK_CONTESTS[0]} onClick={onContestClick} />
+           {loading ? (
+             <div className="flex items-center justify-center py-20">
+               <Loader2 className="w-8 h-8 animate-spin text-primary" />
+               <span className="ml-3 text-neutral-muted">Caricamento...</span>
              </div>
-             
-             {/* Side Column */}
-             <div className="md:col-span-4 flex flex-col gap-8 mt-12 md:mt-0">
-               <div className="bg-neutral-bg p-8 text-center border border-gray-200">
-                 <h3 className="font-display text-2xl mb-2">Sei un Tecnico?</h3>
-                 <p className="text-neutral-muted text-sm mb-6">Entra nel network. Ricevi incarichi per CILA, Calcoli e Sicurezza.</p>
-                 <Button variant="secondary" fullWidth onClick={() => alert("Registrazione Tecnico")}>Candidati ora</Button>
+           ) : contests.length > 0 ? (
+             <>
+               <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+                 {/* Big Feature */}
+                 <div className="md:col-span-8">
+                    {contests[0] && <ContestCard contest={contests[0]} onClick={onContestClick} />}
+                 </div>
+
+                 {/* Side Column */}
+                 <div className="md:col-span-4 flex flex-col gap-8 mt-12 md:mt-0">
+                   <div className="bg-neutral-bg p-8 text-center border border-gray-200">
+                     <h3 className="font-display text-2xl mb-2">Sei un Tecnico?</h3>
+                     <p className="text-neutral-muted text-sm mb-6">Entra nel network. Ricevi incarichi per CILA, Calcoli e Sicurezza.</p>
+                     <Button variant="secondary" fullWidth onClick={() => onNavigate('DASHBOARD')}>Candidati ora</Button>
+                   </div>
+                   {contests[1] && <ContestCard contest={contests[1]} onClick={onContestClick} />}
+                 </div>
                </div>
-               <ContestCard contest={MOCK_CONTESTS[1]} onClick={onContestClick} />
+
+               {/* Bottom Row */}
+               {contests.length > 2 && (
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
+                   {contests.slice(2, 5).map(c => (
+                     <ContestCard key={c.id} contest={c} onClick={onContestClick} />
+                   ))}
+                 </div>
+               )}
+             </>
+           ) : (
+             <div className="text-center py-12 text-neutral-muted">
+               <p>Nessun concorso disponibile al momento.</p>
+               <Button variant="primary" className="mt-4" onClick={() => onNavigate('LAUNCH_WIZARD')}>
+                 Lancia il primo concorso
+               </Button>
              </div>
-           </div>
-           
-           {/* Bottom Row */}
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
-             {MOCK_CONTESTS.slice(2, 5).map(c => (
-               <ContestCard key={c.id} contest={c} onClick={onContestClick} />
-             ))}
-           </div>
+           )}
          </div>
       </section>
 

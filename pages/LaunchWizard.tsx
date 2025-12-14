@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
-import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { apiFetch, isLoggedIn } from '../utils/api';
 
 interface WizardProps {
   onComplete: () => void;
   onCancel: () => void;
+  onLoginRequired?: () => void;
 }
 
-export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel }) => {
+export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLoginRequired }) => {
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     category: '',
     styles: [] as string[],
@@ -25,6 +29,63 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel }) =>
 
   const handleNext = () => setStep(prev => Math.min(prev + 1, totalSteps));
   const handleBack = () => setStep(prev => Math.max(prev - 1, 1));
+
+  const categoryMap: Record<string, string> = {
+    'residential': 'RESIDENTIAL',
+    'commercial': 'COMMERCIAL',
+    'office': 'COMMERCIAL',
+    'interior': 'INTERIOR',
+    'landscape': 'URBAN',
+    'concept': 'CONCEPT',
+  };
+
+  const handleSubmit = async () => {
+    // Check if user is logged in
+    if (!isLoggedIn()) {
+      if (onLoginRequired) {
+        onLoginRequired();
+      } else {
+        setError('Devi effettuare il login per pubblicare un concorso');
+      }
+      return;
+    }
+
+    // Validate required fields
+    if (!formData.title || !formData.description || !formData.budget || !formData.deadline) {
+      setError('Compila tutti i campi obbligatori');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    const contestData = {
+      title: formData.title,
+      description: formData.description,
+      brief: formData.description,
+      location: formData.location || 'Italia',
+      category: categoryMap[formData.category] || 'RESIDENTIAL',
+      budget: parseFloat(formData.budget),
+      deadline: new Date(formData.deadline).toISOString(),
+      mustHaves: formData.styles.length > 0 ? [`Stile: ${formData.styles.join(', ')}`] : [],
+      constraints: [],
+      deliverables: ['Planimetria Arredata', 'Render 3D', 'Moodboard'],
+    };
+
+    const { data, error: apiError } = await apiFetch<any>('/contests', {
+      method: 'POST',
+      body: JSON.stringify(contestData),
+    });
+
+    setIsSubmitting(false);
+
+    if (apiError) {
+      setError(apiError);
+      return;
+    }
+
+    onComplete();
+  };
 
   const toggleStyle = (styleId: string) => {
     setFormData(prev => {
@@ -303,20 +364,30 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel }) =>
           {step === 6 && renderStep6()}
         </div>
 
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
         <div className="flex justify-between mt-12 pt-6 border-t border-gray-100">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={step === 1 ? onCancel : handleBack}
             className="text-neutral-muted hover:text-neutral-text"
+            disabled={isSubmitting}
           >
             {step === 1 ? 'Annulla' : 'Indietro'}
           </Button>
-          
-          <Button 
-            onClick={step === totalSteps ? onComplete : handleNext}
+
+          <Button
+            onClick={step === totalSteps ? handleSubmit : handleNext}
             className="min-w-[140px] shadow-lg shadow-primary/20"
+            disabled={isSubmitting}
           >
-            {step === totalSteps ? 'Pubblica Ora' : (
+            {isSubmitting ? (
+              <><Loader2 size={18} className="mr-2 animate-spin" /> Pubblicazione...</>
+            ) : step === totalSteps ? 'Pubblica Ora' : (
               <>Continua <ArrowRight size={18} className="ml-2" /></>
             )}
           </Button>

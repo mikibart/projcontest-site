@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import { PracticeType } from '../types';
-import { 
-  ArrowLeft, ArrowRight, Check, UploadCloud, 
-  FileText, HardHat, Scale, Ruler, Zap, Scroll, MapPin, 
+import {
+  ArrowLeft, ArrowRight, Check, UploadCloud,
+  FileText, HardHat, Scale, Ruler, Zap, Scroll, MapPin,
   FileSearch, Siren, Construction, Landmark, AlertTriangle,
-  Activity, Droplets, ShieldAlert, Calculator, BookOpen
+  Activity, Droplets, ShieldAlert, Calculator, BookOpen, Loader2
 } from 'lucide-react';
+import { apiFetch } from '../utils/api';
 
 interface PracticeWizardProps {
   onComplete: () => void;
@@ -15,6 +16,8 @@ interface PracticeWizardProps {
 
 export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCancel }) => {
   const [step, setStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const totalSteps = 5;
   const progress = (step / totalSteps) * 100;
 
@@ -35,6 +38,45 @@ export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCa
 
   const handleNext = () => setStep(prev => Math.min(prev + 1, totalSteps));
   const handleBack = () => setStep(prev => Math.max(prev - 1, 1));
+
+  const handleSubmit = async () => {
+    // Validate required fields
+    if (!formData.type || !formData.interventionDetails || !formData.contactEmail) {
+      setError('Compila tutti i campi obbligatori');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    const requestData = {
+      type: formData.type,
+      description: formData.interventionDetails,
+      address: formData.location || 'Non specificato',
+      notes: JSON.stringify({
+        propertyType: formData.propertyType,
+        size: formData.size,
+        isVincolato: formData.isVincolato,
+        hasOldPermits: formData.hasOldPermits,
+        contactName: formData.contactName,
+        contactEmail: formData.contactEmail,
+      }),
+    };
+
+    const { data, error: apiError } = await apiFetch<any>('/practices/requests', {
+      method: 'POST',
+      body: JSON.stringify(requestData),
+    });
+
+    setIsSubmitting(false);
+
+    if (apiError) {
+      setError(apiError);
+      return;
+    }
+
+    onComplete();
+  };
 
   // STEP 1: CATEGORIZED SELECTION
   const renderStep1 = () => {
@@ -313,12 +355,20 @@ export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCa
           {step === 5 && renderStep5()}
         </div>
 
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            {error}
+          </div>
+        )}
+
         <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
-          <Button variant="ghost" onClick={step === 1 ? onCancel : handleBack}>
+          <Button variant="ghost" onClick={step === 1 ? onCancel : handleBack} disabled={isSubmitting}>
             {step === 1 ? 'Annulla' : 'Indietro'}
           </Button>
-          <Button onClick={step === totalSteps ? onComplete : handleNext}>
-            {step === totalSteps ? 'Invia Richiesta' : 'Continua'}
+          <Button onClick={step === totalSteps ? handleSubmit : handleNext} disabled={isSubmitting}>
+            {isSubmitting ? (
+              <><Loader2 size={18} className="mr-2 animate-spin" /> Invio...</>
+            ) : step === totalSteps ? 'Invia Richiesta' : 'Continua'}
           </Button>
         </div>
       </div>
