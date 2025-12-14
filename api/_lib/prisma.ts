@@ -4,13 +4,7 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-function createPrismaClient() {
-  return new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  });
-}
-
-const prisma = global.prisma ?? createPrismaClient();
+const prisma = global.prisma || new PrismaClient();
 
 if (process.env.NODE_ENV !== 'production') {
   global.prisma = prisma;
