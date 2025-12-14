@@ -33,7 +33,7 @@ export interface User {
   avatarUrl: string;
 }
 
-export type Page = 'HOME' | 'EXPLORE' | 'CONTEST_DETAIL' | 'DASHBOARD' | 'LAUNCH_WIZARD' | 'HOW_IT_WORKS' | 'PRACTICES' | 'PRACTICE_WIZARD' | 'ADMIN';
+export type Page = 'HOME' | 'EXPLORE' | 'CONTEST_DETAIL' | 'DASHBOARD' | 'LAUNCH_WIZARD' | 'HOW_IT_WORKS' | 'PRACTICES' | 'PRACTICE_WIZARD' | 'ADMIN' | 'PROFILE';
 
 export enum PracticeType {
   // Amministrative

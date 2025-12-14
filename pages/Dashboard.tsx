@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
+import { ProposalsModal } from '../components/ProposalsModal';
 import { AreaChart, Area, XAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Trophy, Clock, TrendingUp, Sparkles, FileText, Download,
@@ -488,10 +489,25 @@ const ClientDashboard: React.FC<{
   activeTab: 'contests' | 'technical';
   setActiveTab: (tab: 'contests' | 'technical') => void;
 }> = ({ data, user, activeTab, setActiveTab }) => {
+  const [selectedContest, setSelectedContest] = useState<{ id: string; title: string } | null>(null);
+
   const stats = data?.stats || {};
   const contests = data?.contests || [];
   const practiceRequests = data?.practiceRequests || [];
   const notifications = data?.notifications || [];
+
+  const handleViewProposals = (contest: any) => {
+    setSelectedContest({ id: contest.id, title: contest.title });
+  };
+
+  const handleCloseProposals = () => {
+    setSelectedContest(null);
+  };
+
+  const handleWinnerSelected = () => {
+    // Reload page to refresh data
+    window.location.reload();
+  };
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -600,8 +616,12 @@ const ClientDashboard: React.FC<{
                         </div>
                         <div className="flex items-center gap-3">
                           <ContestStatusBadge status={contest.status} />
-                          <Button variant="outline" size="sm">
-                            <Eye size={14} className="mr-1" /> Vedi proposte
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewProposals(contest)}
+                          >
+                            <Eye size={14} className="mr-1" /> Vedi proposte ({contest.proposalsCount || 0})
                           </Button>
                         </div>
                       </div>
@@ -667,6 +687,17 @@ const ClientDashboard: React.FC<{
           </>
         )}
       </div>
+
+      {/* Proposals Modal for Winner Selection */}
+      {selectedContest && (
+        <ProposalsModal
+          contestId={selectedContest.id}
+          contestTitle={selectedContest.title}
+          isOpen={true}
+          onClose={handleCloseProposals}
+          onWinnerSelected={handleWinnerSelected}
+        />
+      )}
     </div>
   );
 };
