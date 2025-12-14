@@ -114,6 +114,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
     }
   };
 
+  const updateContestStatus = async (contestId: string, newStatus: string) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch('/api/admin?action=contests', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contestId, status: newStatus }),
+      });
+
+      if (response.ok) {
+        setContests(contests.map(c => c.id === contestId ? { ...c, status: newStatus } : c));
+      }
+    } catch (err) {
+      console.error('Error updating contest status:', err);
+    }
+  };
+
+  const deleteContest = async (contestId: string, title: string) => {
+    if (!confirm(`Sei sicuro di voler eliminare il concorso "${title}"? Questa azione è irreversibile.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch('/api/admin?action=contests', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contestId }),
+      });
+
+      if (response.ok) {
+        setContests(contests.filter(c => c.id !== contestId));
+      }
+    } catch (err) {
+      console.error('Error deleting contest:', err);
+    }
+  };
+
+  const deleteUser = async (userId: string, name: string) => {
+    if (!confirm(`Sei sicuro di voler eliminare l'utente "${name}"? Questa azione è irreversibile e cancellerà tutti i suoi dati.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch('/api/admin?action=users', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (response.ok) {
+        setUsers(users.filter(u => u.id !== userId));
+      }
+    } catch (err) {
+      console.error('Error deleting user:', err);
+    }
+  };
+
   // Not logged in or not admin
   if (!user || user.role !== 'ADMIN') {
     return (
@@ -345,9 +413,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
                         {new Date(u.createdAt).toLocaleDateString('it-IT')}
                       </td>
                       <td className="px-4 py-3">
-                        <Button variant="ghost" size="sm">
-                          <Eye size={14} />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" title="Visualizza">
+                            <Eye size={14} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Elimina"
+                            onClick={() => deleteUser(u.id, u.name)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -390,23 +469,46 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
                       </td>
                       <td className="px-4 py-3 text-sm">{c.proposalsCount || 0}</td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={c.status} />
+                        <select
+                          value={c.status}
+                          onChange={(e) => updateContestStatus(c.id, e.target.value)}
+                          className={`text-xs border rounded px-2 py-1 font-medium ${
+                            c.status === 'PENDING_APPROVAL' ? 'border-orange-300 bg-orange-50 text-orange-800' :
+                            c.status === 'OPEN' ? 'border-green-300 bg-green-50 text-green-800' :
+                            c.status === 'HIDDEN' ? 'border-red-300 bg-red-50 text-red-800' :
+                            c.status === 'CLOSED' ? 'border-blue-300 bg-blue-50 text-blue-800' :
+                            'border-gray-200'
+                          }`}
+                        >
+                          <option value="PENDING_APPROVAL">⏳ In Attesa</option>
+                          <option value="OPEN">✅ Approvato</option>
+                          <option value="EVALUATING">🔍 In Valutazione</option>
+                          <option value="CLOSED">📁 Chiuso</option>
+                          <option value="HIDDEN">🚫 Nascosto</option>
+                        </select>
                       </td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => toggleFeatured(c.id, c.isFeatured)}
                           className={`p-1 rounded ${c.isFeatured ? 'text-yellow-500' : 'text-gray-300'}`}
+                          title={c.isFeatured ? 'Rimuovi da featured' : 'Aggiungi a featured'}
                         >
                           <Star size={18} fill={c.isFeatured ? 'currentColor' : 'none'} />
                         </button>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" title="Visualizza">
                             <Eye size={14} />
                           </Button>
-                          <Button variant="ghost" size="sm">
-                            <Edit2 size={14} />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Elimina"
+                            onClick={() => deleteContest(c.id, c.title)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 size={14} />
                           </Button>
                         </div>
                       </td>

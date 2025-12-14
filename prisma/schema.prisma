@@ -92,9 +92,11 @@ enum Category {
 
 enum ContestStatus {
   DRAFT
+  PENDING_APPROVAL
   OPEN
   EVALUATING
   CLOSED
+  HIDDEN
 }
 
 // ==================== PROPOSALS ====================

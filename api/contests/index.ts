@@ -38,7 +38,8 @@ async function getContests(req: VercelRequest, res: VercelResponse) {
       maxBudget,
       featured,
       page = '1',
-      limit = '10'
+      limit = '10',
+      showAll // Admin param to show all statuses
     } = req.query;
 
     const where: any = {};
@@ -47,8 +48,12 @@ async function getContests(req: VercelRequest, res: VercelResponse) {
       where.category = category.toString().toUpperCase();
     }
 
+    // For public access, only show OPEN contests unless specific status requested
     if (status) {
       where.status = status.toString().toUpperCase();
+    } else if (showAll !== 'true') {
+      // Default: only show OPEN contests to public
+      where.status = 'OPEN';
     }
 
     if (featured === 'true') {
@@ -153,6 +158,7 @@ async function createContest(req: VercelRequest, res: VercelResponse) {
         constraints,
         deliverables,
         clientId: payload.userId,
+        status: 'PENDING_APPROVAL', // New contests require admin approval
       },
       include: {
         client: {
