@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== USERS ====================
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  name          String
+  role          UserRole @default(CLIENT)
+  avatarUrl     String?
+  bio           String?
+  portfolio     String?
+  phone         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  contests          Contest[]         @relation("ContestOwner")
+  proposals         Proposal[]
+  practiceRequests  PracticeRequest[]
+  files             File[]
+  notifications     Notification[]
+  refreshTokens     RefreshToken[]
+}
+
+enum UserRole {
+  CLIENT
+  ARCHITECT
+  ENGINEER
+  ADMIN
+}
+
+// ==================== REFRESH TOKENS ====================
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ==================== CONTESTS ====================
+model Contest {
+  id              String        @id @default(cuid())
+  title           String
+  description     String
+  brief           String?       @db.Text
+  location        String
+  category        Category
+  budget          Float
+  deadline        DateTime
+  status          ContestStatus @default(OPEN)
+  imageUrl        String?
+  isFeatured      Boolean       @default(false)
+
+  // Technical details
+  mustHaves       String[]
+  constraints     String[]
+  deliverables    String[]
+
+  // Owner
+  clientId        String
+  client          User          @relation("ContestOwner", fields: [clientId], references: [id])
+
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  proposals       Proposal[]
+  files           File[]        @relation("ContestFiles")
+  qaMessages      QAMessage[]
+}
+
+enum Category {
+  RESIDENTIAL
+  COMMERCIAL
+  INTERIOR
+  URBAN
+  CONCEPT
+  OFFICE
+  EXTERIOR
+}
+
+enum ContestStatus {
+  DRAFT
+  OPEN
+  EVALUATING
+  CLOSED
+}
+
+// ==================== PROPOSALS ====================
+model Proposal {
+  id            String         @id @default(cuid())
+  description   String?        @db.Text
+  status        ProposalStatus @default(SUBMITTED)
+  feedback      String?
+
+  // Relations
+  contestId     String
+  contest       Contest        @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  architectId   String
+  architect     User           @relation(fields: [architectId], references: [id])
+  files         File[]         @relation("ProposalFiles")
+
+  // Timestamps
+  submittedAt   DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+enum ProposalStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  SELECTED
+  WINNER
+  REJECTED
+}
+
+// ==================== PRACTICE REQUESTS ====================
+model PracticeRequest {
+  id                  String              @id @default(cuid())
+  type                PracticeType
+  propertyType        String
+  size                Float?
+  location            String
+
+  // Context
+  isVincolato         Boolean             @default(false)
+  hasOldPermits       Boolean             @default(false)
+  interventionDetails String?             @db.Text
+
+  // Contact
+  contactName         String
+  contactEmail        String
+  contactPhone        String?
+
+  // Status
+  status              PracticeStatus      @default(PENDING_QUOTE)
+  quoteAmount         Float?
+  quoteCurrency       String              @default("EUR")
+  quoteValidUntil     DateTime?
+  engineerId          String?
+
+  // Relations
+  userId              String?
+  user                User?               @relation(fields: [userId], references: [id])
+  files               File[]              @relation("PracticeFiles")
+
+  // Timestamps
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+}
+
+enum PracticeType {
+  ACCESSO_ATTI
+  CILA
+  SCIA
+  PDC
+  SANATORIA
+  CALCOLI_STRUTTURALI
+  SISMICA
+  COLLAUDO
+  IMPIANTI_ELETTRICI
+  IMPIANTI_TERMICI
+  RINNOVABILI
+  SICUREZZA
+  DIREZIONE_LAVORI
+  COMPUTO
+  ANTINCENDIO
+  ACUSTICA
+  CATASTO
+  APE
+  CONSULENZA_GENERICA
+}
+
+enum PracticeStatus {
+  PENDING_QUOTE
+  QUOTE_SENT
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// ==================== FILES ====================
+model File {
+  id            String    @id @default(cuid())
+  filename      String
+  originalName  String
+  mimeType      String
+  size          Int
+  url           String
+
+  // Relations
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id])
+  contestId     String?
+  contest       Contest?  @relation("ContestFiles", fields: [contestId], references: [id])
+  proposalId    String?
+  proposal      Proposal? @relation("ProposalFiles", fields: [proposalId], references: [id])
+  practiceId    String?
+  practice      PracticeRequest? @relation("PracticeFiles", fields: [practiceId], references: [id])
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+}
+
+// ==================== Q&A MESSAGES ====================
+model QAMessage {
+  id          String    @id @default(cuid())
+  question    String    @db.Text
+  answer      String?   @db.Text
+  authorName  String
+  authorEmail String
+
+  // Relations
+  contestId   String
+  contest     Contest   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  answeredAt  DateTime?
+}
+
+// ==================== NOTIFICATIONS ====================
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  link      String?
+
+  // Relations
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt DateTime         @default(now())
+}
+
+enum NotificationType {
+  CONTEST_NEW_PROPOSAL
+  CONTEST_WINNER
+  CONTEST_DEADLINE
+  PRACTICE_QUOTE
+  PRACTICE_UPDATE
+  SYSTEM
+}
