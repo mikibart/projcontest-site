@@ -1,6 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import prisma from '../_lib/prisma';
-import { verifyAccessToken, getTokenFromHeader, hashPassword } from '../_lib/auth';
+import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+
+function getTokenFromHeader(authHeader: string | null): string | null {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  return authHeader.substring(7);
+}
+
+function verifyAccessToken(token: string): any {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const token = getTokenFromHeader(req.headers.authorization || null);
@@ -67,7 +84,7 @@ async function updateProfile(userId: string, req: VercelRequest, res: VercelResp
     if (bio !== undefined) updateData.bio = bio;
     if (portfolio !== undefined) updateData.portfolio = portfolio;
     if (phone !== undefined) updateData.phone = phone;
-    if (password) updateData.password = await hashPassword(password);
+    if (password) updateData.password = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.update({
       where: { id: userId },

@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import prisma from '../_lib/prisma';
-import { verifyPassword, generateAccessToken, generateRefreshToken } from '../_lib/auth';
+import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -24,15 +29,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Verify password
-    const isValid = await verifyPassword(password, user.password);
+    const isValid = await bcrypt.compare(password, user.password);
 
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Generate tokens
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    const refreshToken = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      JWT_REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
 
     // Save refresh token
     const expiresAt = new Date();

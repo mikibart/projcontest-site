@@ -1,6 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import prisma from '../_lib/prisma';
-import { verifyRefreshToken, generateAccessToken } from '../_lib/auth';
+import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
+
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -15,8 +19,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Verify token
-    const payload = verifyRefreshToken(refreshToken);
-    if (!payload) {
+    let payload: any;
+    try {
+      payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    } catch {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
 
@@ -35,7 +41,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Generate new access token
-    const accessToken = generateAccessToken(storedToken.user);
+    const accessToken = jwt.sign(
+      { userId: storedToken.user.id, email: storedToken.user.email, role: storedToken.user.role },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
 
     return res.status(200).json({ accessToken });
   } catch (error) {
