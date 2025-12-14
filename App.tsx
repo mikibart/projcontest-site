@@ -7,11 +7,12 @@ import { LaunchWizard } from './pages/LaunchWizard';
 import { HowItWorks } from './pages/HowItWorks';
 import { Practices } from './pages/Practices';
 import { PracticeWizard } from './pages/PracticeWizard';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { Button } from './components/Button';
 import { Logo } from './components/Logo';
 import { LoginModal } from './components/LoginModal';
 import { Page } from './types';
-import { Menu, X, User, LogOut } from 'lucide-react';
+import { Menu, X, User, LogOut, Shield } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('HOME');
@@ -95,6 +96,15 @@ const App: React.FC = () => {
               <div className="hidden md:block h-4 w-[1px] bg-gray-200 mx-2"></div>
               {user ? (
                 <div className="hidden md:flex items-center gap-3">
+                  {user.role === 'ADMIN' && (
+                    <button
+                      className="p-2 hover:bg-red-50 rounded-full transition-colors text-red-600"
+                      onClick={() => handleNavigate('ADMIN')}
+                      title="Admin Dashboard"
+                    >
+                      <Shield size={18} />
+                    </button>
+                  )}
                   <span className="text-sm font-medium text-gray-600">
                     {user.name}
                   </span>
@@ -165,13 +175,16 @@ const App: React.FC = () => {
           />
         )}
         {currentPage === 'LAUNCH_WIZARD' && (
-          <LaunchWizard 
+          <LaunchWizard
             onComplete={() => {
               alert('Concorso Pubblicato! Reindirizzamento alla dashboard...');
               handleNavigate('HOME');
-            }} 
-            onCancel={() => handleNavigate('HOME')} 
+            }}
+            onCancel={() => handleNavigate('HOME')}
           />
+        )}
+        {currentPage === 'ADMIN' && (
+          <AdminDashboard onLoginClick={() => setIsLoginModalOpen(true)} />
         )}
       </main>
 

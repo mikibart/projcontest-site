@@ -1,11 +1,8 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
 import bcrypt from 'bcryptjs';
 
-const connectionString = process.env.DATABASE_URL!;
-const adapter = new PrismaPg({ connectionString });
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding database...');
@@ -39,7 +36,37 @@ async function main() {
     },
   });
 
-  console.log('Created users:', { client: client.email, architect: architect.email });
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@demo.it' },
+    update: {},
+    create: {
+      email: 'admin@demo.it',
+      password: hashedPassword,
+      name: 'Admin Sistema',
+      role: 'ADMIN',
+      avatarUrl: 'https://picsum.photos/seed/admin1/100/100',
+    },
+  });
+
+  const engineer = await prisma.user.upsert({
+    where: { email: 'ingegnere@demo.it' },
+    update: {},
+    create: {
+      email: 'ingegnere@demo.it',
+      password: hashedPassword,
+      name: 'Paolo Verdi',
+      role: 'ENGINEER',
+      avatarUrl: 'https://picsum.photos/seed/eng1/100/100',
+      bio: 'Ingegnere strutturista con esperienza in calcoli sismici',
+    },
+  });
+
+  console.log('Created users:', {
+    client: client.email,
+    architect: architect.email,
+    admin: admin.email,
+    engineer: engineer.email
+  });
 
   // Create demo contests
   const contests = [
