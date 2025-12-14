@@ -43,13 +43,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
       }
 
       const [statsRes, usersRes, contestsRes] = await Promise.all([
-        fetch('/api/admin/stats', {
+        fetch('/api/admin?action=stats', {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
-        fetch('/api/admin/users', {
+        fetch('/api/admin?action=users', {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
-        fetch('/api/admin/contests', {
+        fetch('/api/admin?action=contests', {
           headers: { 'Authorization': `Bearer ${token}` },
         }),
       ]);
@@ -77,7 +77,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('/api/admin/users', {
+      const response = await fetch('/api/admin?action=users', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -97,7 +97,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
   const toggleFeatured = async (contestId: string, currentFeatured: boolean) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch('/api/admin/contests', {
+      const response = await fetch('/api/admin?action=contests', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
