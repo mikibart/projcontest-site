@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home } from './pages/Home';
 import { Explore } from './pages/Explore';
 import { ContestDetail } from './pages/ContestDetail';
@@ -9,13 +9,31 @@ import { Practices } from './pages/Practices';
 import { PracticeWizard } from './pages/PracticeWizard';
 import { Button } from './components/Button';
 import { Logo } from './components/Logo';
+import { LoginModal } from './components/LoginModal';
 import { Page } from './types';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, User, LogOut } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('HOME');
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    setUser(null);
+  };
 
   const handleNavigate = (page: Page) => {
     setCurrentPage(page);
@@ -75,12 +93,27 @@ const App: React.FC = () => {
             {/* CTA & Mobile Toggle */}
             <div className="flex items-center gap-3">
               <div className="hidden md:block h-4 w-[1px] bg-gray-200 mx-2"></div>
-              <button 
-                className="hidden md:block text-sm font-medium hover:text-primary transition-colors"
-                onClick={() => alert("Login Flow")}
-              >
-                Log in
-              </button>
+              {user ? (
+                <div className="hidden md:flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-600">
+                    {user.name}
+                  </span>
+                  <button
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    onClick={handleLogout}
+                    title="Logout"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="hidden md:block text-sm font-medium hover:text-primary transition-colors"
+                  onClick={() => setIsLoginModalOpen(true)}
+                >
+                  Log in
+                </button>
+              )}
               <Button 
                 size="sm" 
                 variant="primary" 
@@ -141,6 +174,13 @@ const App: React.FC = () => {
           />
         )}
       </main>
+
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onLoginSuccess={(loggedInUser) => setUser(loggedInUser)}
+      />
 
       {/* Footer - Minimalist */}
       <footer className="bg-primary text-white pt-20 pb-8 mt-auto relative overflow-hidden">
