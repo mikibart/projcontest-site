@@ -198,7 +198,7 @@ async function selectWinner(proposalId: string, req: VercelRequest, res: VercelR
     await prisma.notification.create({
       data: {
         userId: proposal.architectId,
-        type: 'CONTEST_WON',
+        type: 'CONTEST_WINNER',
         title: 'Hai vinto il concorso!',
         message: `La tua proposta è stata selezionata come vincitrice per "${proposal.contest.title}"`,
         link: `/contest/${proposal.contestId}`,
