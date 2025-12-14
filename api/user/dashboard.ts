@@ -54,7 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function getArchitectDashboard(userId: string, res: VercelResponse) {
-  const [proposals, winningProposals, recentContests] = await Promise.all([
+  const [proposals, winningProposals, recentContests, notifications] = await Promise.all([
     // All proposals
     prisma.proposal.findMany({
       where: { architectId: userId },
@@ -81,6 +81,12 @@ async function getArchitectDashboard(userId: string, res: VercelResponse) {
       orderBy: { createdAt: 'desc' },
       take: 5,
     }),
+    // Notifications
+    prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    }),
   ]);
 
   const totalEarnings = winningProposals.reduce((sum, p) => sum + p.contest.budget, 0);
@@ -98,6 +104,8 @@ async function getArchitectDashboard(userId: string, res: VercelResponse) {
       proposalsCount: c._count.proposals,
       daysRemaining: Math.max(0, Math.ceil((new Date(c.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24))),
     })),
+    notifications,
+    unreadNotifications: notifications.filter(n => !n.read).length,
   });
 }
 
