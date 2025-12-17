@@ -9,6 +9,7 @@ import { Practices } from './pages/Practices';
 import { PracticeWizard } from './pages/PracticeWizard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Profile } from './pages/Profile';
+import { About } from './pages/About';import { Manifesto } from './pages/Manifesto';import { Careers } from './pages/Careers';import { Architects } from './pages/Architects';
 import { Button } from './components/Button';
 import { Logo } from './components/Logo';
 import { LoginModal } from './components/LoginModal';
@@ -203,6 +204,10 @@ const App: React.FC = () => {
           />
         )}
       </main>
+        {currentPage === 'ABOUT' && <About onNavigate={handleNavigate} />}
+        {currentPage === 'MANIFESTO' && <Manifesto onNavigate={handleNavigate} />}
+        {currentPage === 'CAREERS' && <Careers onNavigate={handleNavigate} />}
+        {currentPage === 'ARCHITECTS' && <Architects onNavigate={handleNavigate} />}
 
       {/* Login Modal */}
       <LoginModal
@@ -223,20 +228,20 @@ const App: React.FC = () => {
              <div className="grid grid-cols-2 md:grid-cols-3 gap-12 mt-8 md:mt-0 text-sm text-gray-400">
                 <div className="flex flex-col gap-4">
                   <span className="text-white font-bold tracking-wider uppercase text-xs">Platform</span>
-                  <button className="text-left hover:text-white transition-colors">How it works</button>
-                  <button className="text-left hover:text-white transition-colors">Pratiche Edilizie</button>
-                  <button className="text-left hover:text-white transition-colors">Architects</button>
+                  <button onClick={() => handleNavigate('HOW_IT_WORKS')} className="text-left hover:text-white transition-colors">How it works</button>
+                  <button onClick={() => handleNavigate('PRACTICES')} className="text-left hover:text-white transition-colors">Pratiche Edilizie</button>
+                  <button onClick={() => handleNavigate('ARCHITECTS')} className="text-left hover:text-white transition-colors">Architects</button>
                 </div>
                 <div className="flex flex-col gap-4">
                   <span className="text-white font-bold tracking-wider uppercase text-xs">Company</span>
-                  <button className="text-left hover:text-white transition-colors">About</button>
-                  <button className="text-left hover:text-white transition-colors">Manifesto</button>
-                  <button className="text-left hover:text-white transition-colors">Careers</button>
+                  <button onClick={() => handleNavigate('ABOUT')} className="text-left hover:text-white transition-colors">About</button>
+                  <button onClick={() => handleNavigate('MANIFESTO')} className="text-left hover:text-white transition-colors">Manifesto</button>
+                  <button onClick={() => handleNavigate('CAREERS')} className="text-left hover:text-white transition-colors">Careers</button>
                 </div>
              </div>
           </div>
           <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-white/10 text-xs text-gray-500">
-             <p>© 2024 ProjContest Inc. Milan, Italy.</p>
+             <p>© 2025 ProjContest Inc. Palermo, Italy.</p>
              <div className="flex gap-6 mt-4 md:mt-0">
                <span>Privacy Policy</span>
                <span>Terms of Service</span>
