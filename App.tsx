@@ -10,18 +10,21 @@ import { PracticeWizard } from './pages/PracticeWizard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Profile } from './pages/Profile';
 import { About } from './pages/About';import { Manifesto } from './pages/Manifesto';import { Careers } from './pages/Careers';import { Architects } from './pages/Architects';
+import { Portfolio } from './pages/Portfolio';
 import { Button } from './components/Button';
 import { Logo } from './components/Logo';
 import { LoginModal } from './components/LoginModal';
 import { NotificationsDropdown } from './components/NotificationsDropdown';
+import { MessagesPanel } from './components/MessagesPanel';
 import { Page } from './types';
-import { Menu, X, User, LogOut, Shield } from 'lucide-react';
+import { Menu, X, User, LogOut, Shield, MessageSquare, Briefcase } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('HOME');
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
 
   // Check for existing session on mount
@@ -100,6 +103,22 @@ const App: React.FC = () => {
               {user ? (
                 <div className="hidden md:flex items-center gap-3">
                   <NotificationsDropdown />
+                  <button
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors relative"
+                    onClick={() => setIsMessagesOpen(true)}
+                    title="Messaggi"
+                  >
+                    <MessageSquare size={18} />
+                  </button>
+                  {user.role === 'ARCHITECT' && (
+                    <button
+                      className="p-2 hover:bg-green-50 rounded-full transition-colors text-green-600"
+                      onClick={() => handleNavigate('PORTFOLIO')}
+                      title="Il tuo Portfolio"
+                    >
+                      <Briefcase size={18} />
+                    </button>
+                  )}
                   {user.role === 'ADMIN' && (
                     <button
                       className="p-2 hover:bg-red-50 rounded-full transition-colors text-red-600"
@@ -208,12 +227,19 @@ const App: React.FC = () => {
         {currentPage === 'MANIFESTO' && <Manifesto onNavigate={handleNavigate} />}
         {currentPage === 'CAREERS' && <Careers onNavigate={handleNavigate} />}
         {currentPage === 'ARCHITECTS' && <Architects onNavigate={handleNavigate} />}
+        {currentPage === 'PORTFOLIO' && <Portfolio editable={true} />}
 
       {/* Login Modal */}
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
         onLoginSuccess={(loggedInUser) => setUser(loggedInUser)}
+      />
+
+      {/* Messages Panel */}
+      <MessagesPanel
+        isOpen={isMessagesOpen}
+        onClose={() => setIsMessagesOpen(false)}
       />
 
       {/* Footer - Minimalist */}

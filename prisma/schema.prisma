@@ -25,10 +25,23 @@ model User {
   contests          Contest[]         @relation("ContestOwner")
   proposals         Proposal[]
   practiceRequests  PracticeRequest[]
+  assignedPractices PracticeRequest[] @relation("EngineerPractices")
   files             File[]
   notifications     Notification[]
   refreshTokens     RefreshToken[]
   payments          Payment[]
+
+  // Reviews
+  reviewsGiven      Review[]          @relation("ReviewsGiven")
+  reviewsReceived   Review[]          @relation("ReviewsReceived")
+
+  // Messages
+  messagesSent      Message[]         @relation("MessagesSent")
+  messagesReceived  Message[]         @relation("MessagesReceived")
+
+  // Drafts & Portfolio
+  draftContests     DraftContest[]
+  portfolioProjects PortfolioProject[]
 }
 
 enum UserRole {
@@ -80,6 +93,9 @@ model Contest {
   files           File[]        @relation("ContestFiles")
   qaMessages      QAMessage[]
   payments        Payment[]
+  reviews         Review[]
+  messages        Message[]
+  portfolioProject PortfolioProject?
 }
 
 enum Category {
@@ -107,6 +123,7 @@ model Proposal {
   description   String?        @db.Text
   status        ProposalStatus @default(SUBMITTED)
   feedback      String?
+  withdrawnAt   DateTime?      // If architect withdraws proposal
 
   // Relations
   contestId     String
@@ -114,6 +131,7 @@ model Proposal {
   architectId   String
   architect     User           @relation(fields: [architectId], references: [id])
   files         File[]         @relation("ProposalFiles")
+  messages      Message[]
 
   // Timestamps
   submittedAt   DateTime       @default(now())
@@ -126,6 +144,7 @@ enum ProposalStatus {
   SELECTED
   WINNER
   REJECTED
+  WITHDRAWN
 }
 
 // ==================== PRACTICE REQUESTS ====================
@@ -151,11 +170,18 @@ model PracticeRequest {
   quoteAmount         Float?
   quoteCurrency       String              @default("EUR")
   quoteValidUntil     DateTime?
-  engineerId          String?
+  quoteNotes          String?             @db.Text
+
+  // Progress tracking
+  progressPercent     Int                 @default(0)
+  progressNotes       String?             @db.Text
+  completedAt         DateTime?
 
   // Relations
   userId              String?
   user                User?               @relation(fields: [userId], references: [id])
+  engineerId          String?
+  engineer            User?               @relation("EngineerPractices", fields: [engineerId], references: [id])
   files               File[]              @relation("PracticeFiles")
 
   // Timestamps
@@ -255,8 +281,14 @@ enum NotificationType {
   CONTEST_NEW_PROPOSAL
   CONTEST_WINNER
   CONTEST_DEADLINE
+  CONTEST_QA_NEW
+  CONTEST_QA_ANSWER
   PRACTICE_QUOTE
   PRACTICE_UPDATE
+  PRACTICE_CLAIMED
+  PRACTICE_COMPLETED
+  REVIEW_RECEIVED
+  MESSAGE_NEW
   SYSTEM
   PAYMENT_REQUIRED
   PAYMENT_RECEIVED
@@ -299,4 +331,112 @@ enum PaymentProvider {
   STRIPE
   PAYPAL
   BANK_TRANSFER
+}
+
+// ==================== REVIEWS ====================
+model Review {
+  id          String      @id @default(cuid())
+  rating      Int         // 1-5 stars
+  comment     String?     @db.Text
+
+  // Who is being reviewed
+  revieweeId  String
+  reviewee    User        @relation("ReviewsReceived", fields: [revieweeId], references: [id], onDelete: Cascade)
+
+  // Who wrote the review
+  reviewerId  String
+  reviewer    User        @relation("ReviewsGiven", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  // Context (optional - linked to contest)
+  contestId   String?
+  contest     Contest?    @relation(fields: [contestId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([reviewerId, contestId]) // One review per reviewer per contest
+}
+
+// ==================== MESSAGES ====================
+model Message {
+  id          String      @id @default(cuid())
+  content     String      @db.Text
+  read        Boolean     @default(false)
+
+  // Sender
+  senderId    String
+  sender      User        @relation("MessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+
+  // Receiver
+  receiverId  String
+  receiver    User        @relation("MessagesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  // Context (optional - linked to contest or proposal)
+  contestId   String?
+  contest     Contest?    @relation(fields: [contestId], references: [id], onDelete: SetNull)
+  proposalId  String?
+  proposal    Proposal?   @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt   DateTime    @default(now())
+}
+
+// ==================== DRAFT CONTESTS ====================
+model DraftContest {
+  id              String    @id @default(cuid())
+  title           String?
+  description     String?
+  brief           String?   @db.Text
+  location        String?
+  category        Category?
+  budget          Float?
+  deadline        DateTime?
+  imageUrl        String?
+
+  // Technical details
+  mustHaves       String[]
+  constraints     String[]
+  deliverables    String[]
+  styles          String[]
+
+  // Current step in wizard
+  currentStep     Int       @default(1)
+
+  // Draft data as JSON for flexibility
+  formData        Json?
+
+  // Owner
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ==================== PORTFOLIO PROJECTS ====================
+model PortfolioProject {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  category    Category
+  location    String?
+  year        Int?
+  imageUrl    String?
+  images      String[] // Additional images
+  tags        String[]
+  featured    Boolean  @default(false)
+
+  // Owner
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Linked to won contest (optional)
+  contestId   String?  @unique
+  contest     Contest? @relation(fields: [contestId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

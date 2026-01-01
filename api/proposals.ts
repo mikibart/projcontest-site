@@ -36,6 +36,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return selectWinner(proposalId as string, req, res);
   }
 
+  // PUT /api/proposals?proposalId=xxx&action=withdraw - Withdraw proposal
+  if (req.method === 'PUT' && proposalId && action === 'withdraw') {
+    return withdrawProposal(proposalId as string, req, res);
+  }
+
+  // PUT /api/proposals?proposalId=xxx&action=update - Update proposal
+  if (req.method === 'PUT' && proposalId && action === 'update') {
+    return updateProposal(proposalId as string, req, res);
+  }
+
+  // PUT /api/proposals?proposalId=xxx&action=feedback - Add feedback
+  if (req.method === 'PUT' && proposalId && action === 'feedback') {
+    return addFeedback(proposalId as string, req, res);
+  }
+
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
@@ -208,6 +223,218 @@ async function selectWinner(proposalId: string, req: VercelRequest, res: VercelR
     return res.status(200).json(updatedProposal);
   } catch (error) {
     console.error('Select winner error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function withdrawProposal(proposalId: string, req: VercelRequest, res: VercelResponse) {
+  try {
+    const token = getTokenFromHeader(req.headers.authorization || null);
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const payload = verifyAccessToken(token);
+    if (!payload) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Get proposal
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      include: {
+        contest: { select: { status: true, title: true, clientId: true } },
+      },
+    });
+
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    // Check ownership
+    if (proposal.architectId !== payload.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Can't withdraw if already winner or rejected
+    if (proposal.status === 'WINNER') {
+      return res.status(400).json({ error: 'Cannot withdraw a winning proposal' });
+    }
+    if (proposal.status === 'REJECTED') {
+      return res.status(400).json({ error: 'Proposal was already rejected' });
+    }
+    if (proposal.status === 'WITHDRAWN') {
+      return res.status(400).json({ error: 'Proposal was already withdrawn' });
+    }
+
+    // Can only withdraw if contest is still open
+    if (proposal.contest.status !== 'OPEN' && proposal.contest.status !== 'EVALUATING') {
+      return res.status(400).json({ error: 'Cannot withdraw from a closed contest' });
+    }
+
+    // Update proposal
+    const updatedProposal = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: {
+        status: 'WITHDRAWN',
+        withdrawnAt: new Date(),
+      },
+    });
+
+    // Notify contest owner
+    await prisma.notification.create({
+      data: {
+        userId: proposal.contest.clientId,
+        type: 'SYSTEM',
+        title: 'Proposta ritirata',
+        message: `Una proposta per "${proposal.contest.title}" è stata ritirata`,
+        link: `/contest/${proposal.contestId}`,
+      },
+    });
+
+    return res.status(200).json(updatedProposal);
+  } catch (error) {
+    console.error('Withdraw proposal error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function updateProposal(proposalId: string, req: VercelRequest, res: VercelResponse) {
+  try {
+    const token = getTokenFromHeader(req.headers.authorization || null);
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const payload = verifyAccessToken(token);
+    if (!payload) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Get proposal
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      include: { contest: { select: { status: true } } },
+    });
+
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    // Check ownership
+    if (proposal.architectId !== payload.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Can only update if contest is still open
+    if (proposal.contest.status !== 'OPEN') {
+      return res.status(400).json({ error: 'Cannot update proposal for a closed contest' });
+    }
+
+    // Can only update if not yet selected/rejected
+    if (proposal.status !== 'SUBMITTED' && proposal.status !== 'UNDER_REVIEW') {
+      return res.status(400).json({ error: 'Cannot update this proposal' });
+    }
+
+    const { description, addFileIds, removeFileIds } = req.body;
+
+    const updateData: any = {};
+    if (description !== undefined) {
+      updateData.description = description;
+    }
+
+    // Handle file updates
+    if (addFileIds?.length > 0) {
+      updateData.files = {
+        connect: addFileIds.map((id: string) => ({ id })),
+      };
+    }
+    if (removeFileIds?.length > 0) {
+      updateData.files = {
+        ...updateData.files,
+        disconnect: removeFileIds.map((id: string) => ({ id })),
+      };
+    }
+
+    const updatedProposal = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: updateData,
+      include: {
+        architect: { select: { id: true, name: true, avatarUrl: true } },
+        files: true,
+      },
+    });
+
+    return res.status(200).json(updatedProposal);
+  } catch (error) {
+    console.error('Update proposal error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function addFeedback(proposalId: string, req: VercelRequest, res: VercelResponse) {
+  try {
+    const token = getTokenFromHeader(req.headers.authorization || null);
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const payload = verifyAccessToken(token);
+    if (!payload) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Get proposal with contest
+    const proposal = await prisma.proposal.findUnique({
+      where: { id: proposalId },
+      include: {
+        contest: { select: { clientId: true, title: true } },
+      },
+    });
+
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    // Only contest owner can add feedback
+    if (proposal.contest.clientId !== payload.userId) {
+      return res.status(403).json({ error: 'Only contest owner can add feedback' });
+    }
+
+    const { feedback, status } = req.body;
+
+    const updateData: any = {};
+    if (feedback !== undefined) {
+      updateData.feedback = feedback;
+    }
+    if (status && ['UNDER_REVIEW', 'SELECTED', 'REJECTED'].includes(status)) {
+      updateData.status = status;
+    }
+
+    const updatedProposal = await prisma.proposal.update({
+      where: { id: proposalId },
+      data: updateData,
+      include: {
+        architect: { select: { id: true, name: true, avatarUrl: true } },
+      },
+    });
+
+    // Notify architect if feedback was added
+    if (feedback) {
+      await prisma.notification.create({
+        data: {
+          userId: proposal.architectId,
+          type: 'SYSTEM',
+          title: 'Feedback ricevuto',
+          message: `Hai ricevuto un feedback per la tua proposta a "${proposal.contest.title}"`,
+          link: `/contest/${proposal.contestId}`,
+        },
+      });
+    }
+
+    return res.status(200).json(updatedProposal);
+  } catch (error) {
+    console.error('Add feedback error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Clock, MapPin, Users, Coins, Download, MessageSquare, ChevronLeft, Share2, Heart, ShieldCheck, Trophy, CheckCircle2, Loader2, X, Upload } from 'lucide-react';
 import { apiFetch, getUser, isLoggedIn } from '../utils/api';
 import { Category, ContestStatus } from '../types';
+import { QASection } from '../components/QASection';
 
 interface ContestDetailProps {
   id: string;
@@ -33,7 +34,8 @@ export const ContestDetail: React.FC<ContestDetailProps> = ({ id, onBack, onLogi
   const [contest, setContest] = useState<ApiContest | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'brief' | 'requirements'>('brief');
+  const [activeTab, setActiveTab] = useState<'brief' | 'requirements' | 'qa'>('brief');
+  const qaRef = useRef<HTMLDivElement>(null);
 
   // Proposal submission state
   const [showProposalModal, setShowProposalModal] = useState(false);
@@ -201,11 +203,18 @@ export const ContestDetail: React.FC<ContestDetailProps> = ({ id, onBack, onLogi
                    Consegna & Allegati
                    {activeTab === 'requirements' && <span className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full"></span>}
                  </button>
+                 <button
+                   onClick={() => setActiveTab('qa')}
+                   className={`pb-4 text-lg font-medium transition-colors relative ${activeTab === 'qa' ? 'text-primary' : 'text-neutral-muted hover:text-neutral-text'}`}
+                 >
+                   Domande & Risposte
+                   {activeTab === 'qa' && <span className="absolute bottom-0 left-0 w-full h-1 bg-primary rounded-t-full"></span>}
+                 </button>
                </div>
              </div>
 
              <div className="prose prose-lg prose-blue max-w-none text-neutral-text/80 font-serif leading-relaxed">
-               {activeTab === 'brief' ? (
+               {activeTab === 'brief' && (
                  <div className="animate-fade-in space-y-8">
                    <div className="bg-gray-50 p-6 rounded-xl border-l-4 border-secondary italic text-neutral-600">
                      "{contest.description}"
@@ -241,7 +250,8 @@ export const ContestDetail: React.FC<ContestDetailProps> = ({ id, onBack, onLogi
                       )}
                    </div>
                  </div>
-               ) : (
+               )}
+               {activeTab === 'requirements' && (
                  <div className="animate-fade-in space-y-8">
                    {contest.deliverables && contest.deliverables.length > 0 && (
                      <div>
@@ -282,6 +292,15 @@ export const ContestDetail: React.FC<ContestDetailProps> = ({ id, onBack, onLogi
                        </div>
                      </div>
                    </div>
+                 </div>
+               )}
+               {activeTab === 'qa' && (
+                 <div ref={qaRef} className="animate-fade-in not-prose">
+                   <QASection
+                     contestId={id}
+                     isOwner={user?.id === contest.client?.id}
+                     contestStatus={contest.status}
+                   />
                  </div>
                )}
              </div>
@@ -325,7 +344,15 @@ export const ContestDetail: React.FC<ContestDetailProps> = ({ id, onBack, onLogi
                  )}
                  <p className="text-xs text-center text-neutral-muted mb-6">Accettando i termini di servizio e copyright</p>
 
-                 <Button fullWidth variant="outline" className="text-neutral-text border-gray-300">
+                 <Button
+                   fullWidth
+                   variant="outline"
+                   className="text-neutral-text border-gray-300"
+                   onClick={() => {
+                     setActiveTab('qa');
+                     qaRef.current?.scrollIntoView({ behavior: 'smooth' });
+                   }}
+                 >
                    <MessageSquare size={18} className="mr-2"/> Domande Pubbliche
                  </Button>
                </div>
