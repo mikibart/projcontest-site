@@ -72,9 +72,61 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
     }
   }, [activeTab, currentPage, searchTerm, statusFilter]);
 
+  // Load settings when tab changes to settings
+  useEffect(() => {
+    if (activeTab === 'settings' && user?.role === 'ADMIN') {
+      fetchSettingsData();
+    }
+  }, [activeTab, user]);
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('accessToken');
     return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  };
+
+  // Fetch settings from API
+  const fetchSettingsData = async () => {
+    setSettingsLoading(true);
+    try {
+      const response = await fetch('/api/settings', { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setSettingsData(data.settings || {});
+        const formValues: Record<string, string> = {};
+        Object.keys(data.settings || {}).forEach(key => {
+          formValues[key] = data.settings[key].hasValue && !key.includes('SECRET') ? data.settings[key].value : '';
+        });
+        setSettingsForm(formValues);
+      }
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  // Save settings to API
+  const saveSettingsData = async () => {
+    setSettingsSaving(true);
+    setSettingsMessage(null);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ settings: settingsForm }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSettingsMessage({ type: 'success', text: `Salvate ${data.updated?.length || 0} impostazioni` });
+        fetchSettingsData();
+      } else {
+        setSettingsMessage({ type: 'error', text: data.error || 'Errore nel salvataggio' });
+      }
+    } catch (err) {
+      setSettingsMessage({ type: 'error', text: 'Errore di connessione' });
+    } finally {
+      setSettingsSaving(false);
+    }
   };
 
   const fetchAdminData = async () => {
@@ -474,59 +526,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
     { id: 'files', label: 'Files', icon: HardDrive },
     { id: 'settings', label: 'Impostazioni', icon: Settings },
   ];
-
-  // Fetch settings
-  const fetchSettings = async () => {
-    setSettingsLoading(true);
-    try {
-      const response = await fetch('/api/settings', { headers: getAuthHeaders() });
-      if (response.ok) {
-        const data = await response.json();
-        setSettingsData(data.settings || {});
-        // Initialize form with non-sensitive values
-        const formValues: Record<string, string> = {};
-        Object.keys(data.settings || {}).forEach(key => {
-          formValues[key] = data.settings[key].hasValue && !key.includes('SECRET') ? data.settings[key].value : '';
-        });
-        setSettingsForm(formValues);
-      }
-    } catch (err) {
-      console.error('Error fetching settings:', err);
-    } finally {
-      setSettingsLoading(false);
-    }
-  };
-
-  // Save settings
-  const saveSettings = async () => {
-    setSettingsSaving(true);
-    setSettingsMessage(null);
-    try {
-      const response = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ settings: settingsForm }),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setSettingsMessage({ type: 'success', text: `Salvate ${data.updated?.length || 0} impostazioni` });
-        fetchSettings(); // Refresh to get updated masked values
-      } else {
-        setSettingsMessage({ type: 'error', text: data.error || 'Errore nel salvataggio' });
-      }
-    } catch (err) {
-      setSettingsMessage({ type: 'error', text: 'Errore di connessione' });
-    } finally {
-      setSettingsSaving(false);
-    }
-  };
-
-  // Load settings when tab changes to settings
-  useEffect(() => {
-    if (activeTab === 'settings' && user?.role === 'ADMIN') {
-      fetchSettings();
-    }
-  }, [activeTab]);
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -1174,7 +1173,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
 
                 {/* Save Button */}
                 <div className="flex justify-end">
-                  <Button onClick={saveSettings} disabled={settingsSaving} className="min-w-[200px]">
+                  <Button onClick={saveSettingsData} disabled={settingsSaving} className="min-w-[200px]">
                     {settingsSaving ? (
                       <><Loader2 size={18} className="mr-2 animate-spin" /> Salvataggio...</>
                     ) : (

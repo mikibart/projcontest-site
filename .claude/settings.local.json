@@ -25,7 +25,9 @@
       "Bash(curl:*)",
       "Bash(tree:*)",
       "Bash(npx prisma generate)",
-      "Bash(timeout 10 sleep:*)"
+      "Bash(timeout 10 sleep:*)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:projcontest-site.vercel.app)"
     ]
   }
 }
