@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '../components/Button';
-import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Loader2, X, FileText, Image, CheckCircle } from 'lucide-react';
 import { apiFetch, isLoggedIn } from '../utils/api';
+
+interface UploadedFile {
+  id: string;
+  filename: string;
+  url: string;
+  size: number;
+  mimeType: string;
+}
 
 interface WizardProps {
   onComplete: () => void;
@@ -12,7 +20,10 @@ interface WizardProps {
 export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLoginRequired }) => {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     category: '',
     styles: [] as string[],
@@ -70,6 +81,7 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
       mustHaves: formData.styles.length > 0 ? [`Stile: ${formData.styles.join(', ')}`] : [],
       constraints: [],
       deliverables: ['Planimetria Arredata', 'Render 3D', 'Moodboard'],
+      fileIds: uploadedFiles.map(f => f.id),
     };
 
     const { data, error: apiError } = await apiFetch<any>('/contests', {
@@ -92,11 +104,89 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
       const exists = prev.styles.includes(styleId);
       return {
         ...prev,
-        styles: exists 
+        styles: exists
           ? prev.styles.filter(s => s !== styleId)
           : [...prev.styles, styleId]
       };
     });
+  };
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    if (!isLoggedIn()) {
+      if (onLoginRequired) {
+        onLoginRequired();
+      } else {
+        setError('Devi effettuare il login per caricare file');
+      }
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    const token = localStorage.getItem('accessToken');
+
+    for (const file of Array.from(files)) {
+      // Validate file size (max 50MB)
+      if (file.size > 50 * 1024 * 1024) {
+        setError(`Il file ${file.name} supera i 50MB`);
+        continue;
+      }
+
+      // Validate file type
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'application/dwg', 'application/acad', 'application/x-dwg', 'image/vnd.dwg'];
+      const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.dwg'];
+      const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+
+      if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+        setError(`Tipo file non supportato: ${file.name}. Usa PDF, JPG, PNG o DWG.`);
+        continue;
+      }
+
+      try {
+        const response = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+          body: file,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Errore durante il caricamento');
+        }
+
+        setUploadedFiles(prev => [...prev, data.file]);
+      } catch (err: any) {
+        setError(err.message || 'Errore durante il caricamento del file');
+      }
+    }
+
+    setIsUploading(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.startsWith('image/')) return <Image size={20} className="text-blue-600" />;
+    if (mimeType === 'application/pdf') return <FileText size={20} className="text-red-600" />;
+    return <FileText size={20} className="text-gray-600" />;
   };
 
   const renderStep1 = () => (
@@ -231,29 +321,81 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
     <div className="animate-fade-in text-center py-4">
       <h2 className="text-2xl font-display font-bold mb-2 text-neutral-text">Planimetrie e Foto</h2>
       <p className="text-neutral-muted mb-8">Senza una pianta quotata, gli architetti non possono lavorare con precisione.</p>
-      
-      <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 hover:bg-gray-50 hover:border-primary transition-all cursor-pointer group bg-white">
-        <div className="w-20 h-20 bg-blue-50 text-primary rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
-          <UploadCloud size={36} />
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={(e) => handleFileUpload(e.target.files)}
+        accept=".pdf,.jpg,.jpeg,.png,.webp,.dwg"
+        multiple
+        className="hidden"
+      />
+
+      <div
+        className={`border-2 border-dashed rounded-2xl p-12 transition-all cursor-pointer group bg-white ${
+          isUploading ? 'border-primary bg-primary/5' : 'border-gray-300 hover:bg-gray-50 hover:border-primary'
+        }`}
+        onClick={() => !isUploading && fileInputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleFileUpload(e.dataTransfer.files);
+        }}
+      >
+        <div className={`w-20 h-20 bg-blue-50 text-primary rounded-full flex items-center justify-center mx-auto mb-4 transition-all shadow-sm ${
+          isUploading ? 'animate-pulse' : 'group-hover:scale-110 group-hover:bg-primary group-hover:text-white'
+        }`}>
+          {isUploading ? <Loader2 size={36} className="animate-spin" /> : <UploadCloud size={36} />}
         </div>
-        <p className="text-xl font-bold text-neutral-text mb-2">Carica i tuoi file qui</p>
-        <p className="text-sm text-neutral-muted mb-6">DWG, PDF, JPG (Max 50MB)</p>
-        <Button variant="secondary" size="sm">Scegli file dal computer</Button>
+        <p className="text-xl font-bold text-neutral-text mb-2">
+          {isUploading ? 'Caricamento in corso...' : 'Carica i tuoi file qui'}
+        </p>
+        <p className="text-sm text-neutral-muted mb-6">DWG, PDF, JPG, PNG (Max 50MB per file)</p>
+        {!isUploading && (
+          <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+            Scegli file dal computer
+          </Button>
+        )}
       </div>
 
-      <div className="mt-8 text-left max-w-md mx-auto">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-muted mb-3">File pronti per l'invio:</h4>
-        <div className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center">
-            <div className="w-10 h-10 bg-red-50 text-red-600 rounded flex items-center justify-center text-xs font-bold mr-3 border border-red-100">PDF</div>
-            <div>
-              <p className="text-sm font-medium text-neutral-text">planimetria_catastale.pdf</p>
-              <p className="text-xs text-neutral-muted">2.4 MB</p>
-            </div>
+      {uploadedFiles.length > 0 && (
+        <div className="mt-8 text-left max-w-md mx-auto">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-muted mb-3">
+            File caricati ({uploadedFiles.length}):
+          </h4>
+          <div className="space-y-2">
+            {uploadedFiles.map((file) => (
+              <div key={file.id} className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center min-w-0 flex-1">
+                  <div className="w-10 h-10 bg-gray-50 rounded flex items-center justify-center mr-3 border border-gray-100 shrink-0">
+                    {getFileIcon(file.mimeType)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-neutral-text truncate">{file.filename}</p>
+                    <p className="text-xs text-neutral-muted">{formatFileSize(file.size)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <Check size={18} className="text-functional-success" />
+                  <button
+                    onClick={() => removeFile(file.id)}
+                    className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
-          <Check size={18} className="text-functional-success" />
         </div>
-      </div>
+      )}
+
+      {uploadedFiles.length === 0 && !isUploading && (
+        <p className="mt-6 text-sm text-neutral-muted">
+          Trascina i file qui o clicca per selezionarli
+        </p>
+      )}
     </div>
   );
 
@@ -396,4 +538,3 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
     </div>
   );
 };
-import { CheckCircle } from 'lucide-react';

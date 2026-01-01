@@ -138,6 +138,7 @@ async function createContest(req: VercelRequest, res: VercelResponse) {
       mustHaves = [],
       constraints = [],
       deliverables = [],
+      fileIds = [],
     } = req.body;
 
     if (!title || !description || !location || !category || !budget || !deadline) {
@@ -166,6 +167,19 @@ async function createContest(req: VercelRequest, res: VercelResponse) {
         },
       },
     });
+
+    // Link uploaded files to the contest
+    if (fileIds.length > 0) {
+      await prisma.file.updateMany({
+        where: {
+          id: { in: fileIds },
+          userId: payload.userId,
+        },
+        data: {
+          contestId: contest.id,
+        },
+      });
+    }
 
     return res.status(201).json(contest);
   } catch (error) {

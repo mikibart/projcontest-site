@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@vercel/blob": "^2.0.0",
     "@vercel/node": "^5.5.15",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
