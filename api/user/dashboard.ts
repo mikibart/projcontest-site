@@ -56,16 +56,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function getArchitectDashboard(userId: string, res: VercelResponse) {
+  // Core queries that should always work
   const [
     proposals,
     winningProposals,
     recentContests,
     notifications,
-    reviewsReceived,
-    unreadMessages,
-    portfolio,
   ] = await Promise.all([
-    // All proposals
     prisma.proposal.findMany({
       where: { architectId: userId },
       include: {
@@ -75,14 +72,12 @@ async function getArchitectDashboard(userId: string, res: VercelResponse) {
       },
       orderBy: { submittedAt: 'desc' },
     }),
-    // Winning proposals
     prisma.proposal.findMany({
       where: { architectId: userId, status: 'WINNER' },
       include: {
         contest: { select: { id: true, budget: true, title: true } },
       },
     }),
-    // Recommended contests
     prisma.contest.findMany({
       where: { status: 'OPEN' },
       include: {
@@ -91,29 +86,39 @@ async function getArchitectDashboard(userId: string, res: VercelResponse) {
       orderBy: { createdAt: 'desc' },
       take: 5,
     }),
-    // Notifications
     prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 10,
     }),
-    // Reviews received
-    prisma.review.aggregate({
+  ]);
+
+  // Optional queries for new tables (may not exist yet)
+  let reviewsReceived = { _avg: { rating: null }, _count: { rating: 0 } };
+  let unreadMessages = 0;
+  let portfolio: any[] = [];
+
+  try {
+    reviewsReceived = await prisma.review.aggregate({
       where: { revieweeId: userId },
       _avg: { rating: true },
       _count: { rating: true },
-    }),
-    // Unread messages count
-    prisma.message.count({
+    });
+  } catch (e) { /* Table may not exist */ }
+
+  try {
+    unreadMessages = await prisma.message.count({
       where: { receiverId: userId, read: false },
-    }),
-    // Portfolio projects
-    prisma.portfolioProject.findMany({
+    });
+  } catch (e) { /* Table may not exist */ }
+
+  try {
+    portfolio = await prisma.portfolioProject.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 5,
-    }),
-  ]);
+    });
+  } catch (e) { /* Table may not exist */ }
 
   const totalEarnings = winningProposals.reduce((sum, p) => sum + p.contest.budget, 0);
 
@@ -141,15 +146,12 @@ async function getArchitectDashboard(userId: string, res: VercelResponse) {
 }
 
 async function getClientDashboard(userId: string, res: VercelResponse) {
+  // Core queries
   const [
     contests,
     practiceRequests,
     notifications,
-    drafts,
-    unreadMessages,
-    reviewsGiven,
   ] = await Promise.all([
-    // User's contests
     prisma.contest.findMany({
       where: { clientId: userId },
       include: {
@@ -157,36 +159,42 @@ async function getClientDashboard(userId: string, res: VercelResponse) {
       },
       orderBy: { createdAt: 'desc' },
     }),
-    // Practice requests
     prisma.practiceRequest.findMany({
       where: { userId },
-      include: {
-        engineer: { select: { id: true, name: true } },
-      },
       orderBy: { createdAt: 'desc' },
       take: 10,
     }),
-    // Notifications
     prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 10,
     }),
-    // Saved drafts
-    prisma.draftContest.findMany({
+  ]);
+
+  // Optional queries for new tables
+  let drafts: any[] = [];
+  let unreadMessages = 0;
+  let reviewsGiven = 0;
+
+  try {
+    drafts = await prisma.draftContest.findMany({
       where: { userId },
       orderBy: { updatedAt: 'desc' },
       take: 5,
-    }),
-    // Unread messages count
-    prisma.message.count({
+    });
+  } catch (e) { /* Table may not exist */ }
+
+  try {
+    unreadMessages = await prisma.message.count({
       where: { receiverId: userId, read: false },
-    }),
-    // Reviews given count
-    prisma.review.count({
+    });
+  } catch (e) { /* Table may not exist */ }
+
+  try {
+    reviewsGiven = await prisma.review.count({
       where: { reviewerId: userId },
-    }),
-  ]);
+    });
+  } catch (e) { /* Table may not exist */ }
 
   const activeContests = contests.filter(c => c.status === 'OPEN' || c.status === 'EVALUATING');
   const totalProposalsReceived = contests.reduce((sum, c) => sum + c._count.proposals, 0);
@@ -215,15 +223,21 @@ async function getClientDashboard(userId: string, res: VercelResponse) {
 }
 
 async function getEngineerDashboard(userId: string, res: VercelResponse) {
-  const [
-    availablePractices,
-    assignedPractices,
-    completedPractices,
-    notifications,
-    unreadMessages,
-  ] = await Promise.all([
-    // Available practices (not yet claimed)
-    prisma.practiceRequest.findMany({
+  // Core queries
+  const notifications = await prisma.notification.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    take: 10,
+  });
+
+  // Queries that depend on new schema fields (engineerId)
+  let availablePractices: any[] = [];
+  let assignedPractices: any[] = [];
+  let completedPractices: any[] = [];
+  let unreadMessages = 0;
+
+  try {
+    availablePractices = await prisma.practiceRequest.findMany({
       where: {
         engineerId: null,
         status: 'PENDING_QUOTE',
@@ -234,9 +248,11 @@ async function getEngineerDashboard(userId: string, res: VercelResponse) {
       },
       orderBy: { createdAt: 'desc' },
       take: 20,
-    }),
-    // Assigned practices (in progress)
-    prisma.practiceRequest.findMany({
+    });
+  } catch (e) { /* Field may not exist */ }
+
+  try {
+    assignedPractices = await prisma.practiceRequest.findMany({
       where: {
         engineerId: userId,
         status: { in: ['PENDING_QUOTE', 'QUOTE_SENT', 'ACCEPTED', 'IN_PROGRESS'] },
@@ -246,9 +262,11 @@ async function getEngineerDashboard(userId: string, res: VercelResponse) {
         files: true,
       },
       orderBy: { createdAt: 'desc' },
-    }),
-    // Completed practices
-    prisma.practiceRequest.findMany({
+    });
+  } catch (e) { /* Field may not exist */ }
+
+  try {
+    completedPractices = await prisma.practiceRequest.findMany({
       where: {
         engineerId: userId,
         status: 'COMPLETED',
@@ -256,20 +274,16 @@ async function getEngineerDashboard(userId: string, res: VercelResponse) {
       include: {
         user: { select: { id: true, name: true } },
       },
-      orderBy: { completedAt: 'desc' },
-      take: 10,
-    }),
-    // Notifications
-    prisma.notification.findMany({
-      where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 10,
-    }),
-    // Unread messages
-    prisma.message.count({
+    });
+  } catch (e) { /* Field may not exist */ }
+
+  try {
+    unreadMessages = await prisma.message.count({
       where: { receiverId: userId, read: false },
-    }),
-  ]);
+    });
+  } catch (e) { /* Table may not exist */ }
 
   const totalEarnings = completedPractices.reduce((sum, p) => sum + (p.quoteAmount || 0), 0);
   const inProgressCount = assignedPractices.filter(p => p.status === 'IN_PROGRESS').length;
