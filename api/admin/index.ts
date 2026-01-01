@@ -62,6 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return getContestDetail(req, res);
     case 'user-detail':
       return getUserDetail(req, res);
+    case 'files':
+      return handleFiles(req, res);
     default:
       return res.status(400).json({ error: 'Invalid action' });
   }
@@ -686,6 +688,197 @@ async function getUserDetail(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(user);
   } catch (error) {
     console.error('Get user detail error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// ==================== FILES ====================
+async function handleFiles(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET') {
+    return getFiles(req, res);
+  } else if (req.method === 'DELETE') {
+    const { deleteAllOrphans } = req.body || {};
+    if (deleteAllOrphans) {
+      return deleteOrphanFiles(req, res);
+    }
+    return deleteFile(req, res);
+  }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
+
+async function getFiles(req: VercelRequest, res: VercelResponse) {
+  try {
+    const { filter, search, page = '1', limit = '20' } = req.query;
+    const skip = (parseInt(page.toString()) - 1) * parseInt(limit.toString());
+
+    let where: any = {};
+
+    // Filter for orphan files (no associations)
+    if (filter === 'orphan') {
+      where = {
+        AND: [
+          { contestId: null },
+          { proposalId: null },
+          { practiceId: null },
+          { userId: null },
+        ],
+      };
+    } else if (filter === 'contest') {
+      where = { contestId: { not: null } };
+    } else if (filter === 'proposal') {
+      where = { proposalId: { not: null } };
+    } else if (filter === 'practice') {
+      where = { practiceId: { not: null } };
+    }
+
+    if (search) {
+      where.OR = [
+        { filename: { contains: search.toString(), mode: 'insensitive' } },
+        { originalName: { contains: search.toString(), mode: 'insensitive' } },
+      ];
+    }
+
+    const [files, total, orphanCount] = await Promise.all([
+      prisma.file.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true } },
+          contest: { select: { id: true, title: true } },
+          proposal: {
+            select: {
+              id: true,
+              contest: { select: { title: true } },
+              architect: { select: { name: true } },
+            }
+          },
+          practice: { select: { id: true, type: true, contactName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit.toString()),
+      }),
+      prisma.file.count({ where }),
+      prisma.file.count({
+        where: {
+          AND: [
+            { contestId: null },
+            { proposalId: null },
+            { practiceId: null },
+            { userId: null },
+          ],
+        },
+      }),
+    ]);
+
+    // Calculate total storage used
+    const totalStorage = await prisma.file.aggregate({
+      _sum: { size: true },
+    });
+
+    return res.status(200).json({
+      files: files.map(f => ({
+        ...f,
+        isOrphan: !f.contestId && !f.proposalId && !f.practiceId && !f.userId,
+        association: f.contestId ? 'Concorso' :
+                    f.proposalId ? 'Proposta' :
+                    f.practiceId ? 'Pratica' :
+                    f.userId ? 'Utente' : 'Nessuna',
+      })),
+      total,
+      orphanCount,
+      totalStorage: totalStorage._sum.size || 0,
+      page: parseInt(page.toString()),
+      totalPages: Math.ceil(total / parseInt(limit.toString())),
+    });
+  } catch (error) {
+    console.error('Get files error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function deleteFile(req: VercelRequest, res: VercelResponse) {
+  try {
+    const { fileId, deleteFromBlob } = req.body;
+    if (!fileId) return res.status(400).json({ error: 'File ID required' });
+
+    // Get file info first
+    const file = await prisma.file.findUnique({
+      where: { id: fileId },
+    });
+
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Delete from Vercel Blob if requested
+    if (deleteFromBlob && file.url) {
+      try {
+        const { del } = await import('@vercel/blob');
+        await del(file.url);
+      } catch (blobError) {
+        console.error('Failed to delete from blob:', blobError);
+        // Continue with database deletion even if blob deletion fails
+      }
+    }
+
+    // Delete from database
+    await prisma.file.delete({ where: { id: fileId } });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Delete file error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function deleteOrphanFiles(req: VercelRequest, res: VercelResponse) {
+  try {
+    // Find all orphan files
+    const orphanFiles = await prisma.file.findMany({
+      where: {
+        AND: [
+          { contestId: null },
+          { proposalId: null },
+          { practiceId: null },
+          { userId: null },
+        ],
+      },
+    });
+
+    // Delete from Vercel Blob
+    try {
+      const { del } = await import('@vercel/blob');
+      for (const file of orphanFiles) {
+        if (file.url) {
+          try {
+            await del(file.url);
+          } catch (e) {
+            console.error(`Failed to delete blob for file ${file.id}:`, e);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Blob import/delete error:', e);
+    }
+
+    // Delete from database
+    const result = await prisma.file.deleteMany({
+      where: {
+        AND: [
+          { contestId: null },
+          { proposalId: null },
+          { practiceId: null },
+          { userId: null },
+        ],
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      deletedCount: result.count,
+    });
+  } catch (error) {
+    console.error('Delete orphan files error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

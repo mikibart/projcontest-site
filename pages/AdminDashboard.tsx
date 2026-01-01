@@ -5,7 +5,7 @@ import {
   Search, Edit2, Trash2, Eye, CheckCircle, XCircle,
   AlertTriangle, Star, Clock, CreditCard, FileCheck,
   ChevronLeft, ChevronRight, X, Send, Euro, Calendar,
-  Filter, RefreshCw
+  Filter, RefreshCw, HardDrive, ExternalLink, AlertCircle
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -13,7 +13,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'contests' | 'practices' | 'payments' | 'proposals'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'contests' | 'practices' | 'payments' | 'proposals' | 'files'>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState<any>(null);
@@ -22,6 +22,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
   const [practices, setPractices] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [proposals, setProposals] = useState<any[]>([]);
+  const [files, setFiles] = useState<any[]>([]);
+  const [filesStats, setFilesStats] = useState<{ orphanCount: number; totalStorage: number }>({ orphanCount: 0, totalStorage: 0 });
   const [user, setUser] = useState<any>(null);
 
   // Pagination
@@ -108,6 +110,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
         case 'proposals':
           endpoint = `/api/admin?action=proposals&${params}`;
           break;
+        case 'files':
+          endpoint = `/api/admin?action=files&${params}`;
+          break;
         default:
           return;
       }
@@ -135,6 +140,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
           break;
         case 'proposals':
           setProposals(data.proposals || []);
+          setTotalPages(data.totalPages || 1);
+          break;
+        case 'files':
+          setFiles(data.files || []);
+          setFilesStats({ orphanCount: data.orphanCount || 0, totalStorage: data.totalStorage || 0 });
           setTotalPages(data.totalPages || 1);
           break;
       }
@@ -320,6 +330,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
     }
   };
 
+  const deleteFile = async (fileId: string, fileName: string) => {
+    if (!confirm(`Eliminare il file "${fileName}"? Il file verrà rimosso anche dallo storage.`)) return;
+    try {
+      const response = await fetch('/api/admin?action=files', {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ fileId, deleteFromBlob: true }),
+      });
+      if (response.ok) {
+        setFiles(files.filter(f => f.id !== fileId));
+        setFilesStats(prev => ({ ...prev, orphanCount: Math.max(0, prev.orphanCount - 1) }));
+      }
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
+
+  const deleteAllOrphanFiles = async () => {
+    if (!confirm(`Eliminare tutti i ${filesStats.orphanCount} file orfani? Questa azione è irreversibile.`)) return;
+    try {
+      const response = await fetch('/api/admin?action=files', {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ deleteAllOrphans: true }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Eliminati ${data.deletedCount} file orfani`);
+        fetchTabData();
+      }
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
+
   // ==================== DETAIL FETCH ====================
   const openContestDetail = async (contestId: string) => {
     setDetailModal({ type: 'contest', data: null });
@@ -418,6 +463,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
     { id: 'practices', label: 'Pratiche', icon: FileCheck },
     { id: 'payments', label: 'Pagamenti', icon: CreditCard },
     { id: 'proposals', label: 'Proposte', icon: FileText },
+    { id: 'files', label: 'Files', icon: HardDrive },
   ];
 
   return (
@@ -508,6 +554,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
                     <option value="SELECTED">Selezionata</option>
                     <option value="WINNER">Vincitrice</option>
                     <option value="REJECTED">Rifiutata</option>
+                  </>
+                )}
+                {activeTab === 'files' && (
+                  <>
+                    <option value="orphan">Solo Orfani</option>
+                    <option value="contest">Concorsi</option>
+                    <option value="proposal">Proposte</option>
+                    <option value="practice">Pratiche</option>
                   </>
                 )}
               </select>
@@ -743,6 +797,116 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
               </tr>
             )}
           />
+        )}
+
+        {/* Files Tab */}
+        {activeTab === 'files' && (
+          <div className="space-y-6">
+            {/* Files Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><HardDrive size={20} /></div>
+                  <div>
+                    <p className="text-2xl font-bold">{files.length}</p>
+                    <p className="text-sm text-neutral-muted">File Totali</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-50 rounded-lg text-orange-600"><AlertCircle size={20} /></div>
+                  <div>
+                    <p className="text-2xl font-bold">{filesStats.orphanCount}</p>
+                    <p className="text-sm text-neutral-muted">File Orfani</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-50 rounded-lg text-green-600"><HardDrive size={20} /></div>
+                  <div>
+                    <p className="text-2xl font-bold">{(filesStats.totalStorage / (1024 * 1024)).toFixed(2)} MB</p>
+                    <p className="text-sm text-neutral-muted">Storage Usato</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Delete All Orphans Button */}
+            {filesStats.orphanCount > 0 && (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="text-orange-600" size={24} />
+                  <div>
+                    <p className="font-medium text-orange-800">File Orfani Rilevati</p>
+                    <p className="text-sm text-orange-600">Ci sono {filesStats.orphanCount} file non collegati a nessun contenuto.</p>
+                  </div>
+                </div>
+                <Button variant="outline" onClick={deleteAllOrphanFiles} className="border-orange-300 text-orange-700 hover:bg-orange-100">
+                  <Trash2 size={16} className="mr-2" /> Elimina Tutti
+                </Button>
+              </div>
+            )}
+
+            {/* Files Table */}
+            <DataTable
+              columns={['File', 'Tipo', 'Dimensione', 'Associazione', 'Data', 'Azioni']}
+              data={files}
+              renderRow={(f) => (
+                <tr key={f.id} className={`hover:bg-gray-50 ${f.isOrphan ? 'bg-orange-50' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${
+                        f.mimeType?.includes('pdf') ? 'bg-red-100 text-red-600' :
+                        f.mimeType?.includes('image') ? 'bg-blue-100 text-blue-600' :
+                        f.mimeType?.includes('dwg') || f.mimeType?.includes('autocad') ? 'bg-purple-100 text-purple-600' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {f.mimeType?.includes('pdf') ? 'PDF' :
+                         f.mimeType?.includes('image') ? 'IMG' :
+                         f.mimeType?.split('/')[1]?.slice(0, 3).toUpperCase() || 'FILE'}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm truncate max-w-[200px]">{f.originalName}</p>
+                        <p className="text-xs text-neutral-muted font-mono">{f.id.slice(0, 8)}...</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-neutral-muted">{f.mimeType}</td>
+                  <td className="px-4 py-3 text-sm font-mono">{(f.size / 1024).toFixed(1)} KB</td>
+                  <td className="px-4 py-3">
+                    {f.isOrphan ? (
+                      <span className="text-xs px-2 py-1 rounded bg-orange-100 text-orange-800 font-medium">Orfano</span>
+                    ) : (
+                      <div>
+                        <span className={`text-xs px-2 py-1 rounded font-medium ${
+                          f.contestId ? 'bg-blue-100 text-blue-800' :
+                          f.proposalId ? 'bg-green-100 text-green-800' :
+                          f.practiceId ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>{f.association}</span>
+                        <p className="text-xs text-neutral-muted mt-1 truncate max-w-[150px]">
+                          {f.contest?.title || f.proposal?.contest?.title || f.practice?.type || f.user?.name || ''}
+                        </p>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-neutral-muted">{new Date(f.createdAt).toLocaleDateString('it-IT')}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      <a href={f.url} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-gray-100 rounded-lg text-blue-600">
+                        <ExternalLink size={14} />
+                      </a>
+                      <Button variant="ghost" size="sm" onClick={() => deleteFile(f.id, f.originalName)} className="text-red-500 hover:bg-red-50">
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            />
+          </div>
         )}
 
         {/* Pagination */}
