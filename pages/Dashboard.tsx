@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
 import { ProposalsModal } from '../components/ProposalsModal';
+import { PaymentModal } from '../components/PaymentModal';
 import { AreaChart, Area, XAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Trophy, Clock, TrendingUp, Sparkles, FileText, Download,
   HardHat, Activity, AlertTriangle, CheckCircle2, Calendar,
   ChevronRight, Calculator, Siren, Zap, Loader2, LogIn,
-  Briefcase, Users, Eye
+  Briefcase, Users, Eye, CreditCard
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -490,11 +491,25 @@ const ClientDashboard: React.FC<{
   setActiveTab: (tab: 'contests' | 'technical') => void;
 }> = ({ data, user, activeTab, setActiveTab }) => {
   const [selectedContest, setSelectedContest] = useState<{ id: string; title: string } | null>(null);
+  const [paymentContest, setPaymentContest] = useState<{ id: string; title: string; budget: number } | null>(null);
 
   const stats = data?.stats || {};
   const contests = data?.contests || [];
   const practiceRequests = data?.practiceRequests || [];
   const notifications = data?.notifications || [];
+
+  // Check for payment success/failure in URL params
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+    if (paymentStatus === 'success') {
+      // Show success notification or refresh
+      window.history.replaceState({}, '', '/dashboard');
+      window.location.reload();
+    } else if (paymentStatus === 'cancelled' || paymentStatus === 'failed') {
+      window.history.replaceState({}, '', '/dashboard');
+    }
+  }, []);
 
   const handleViewProposals = (contest: any) => {
     setSelectedContest({ id: contest.id, title: contest.title });
@@ -506,6 +521,19 @@ const ClientDashboard: React.FC<{
 
   const handleWinnerSelected = () => {
     // Reload page to refresh data
+    window.location.reload();
+  };
+
+  const handlePayContest = (contest: any) => {
+    setPaymentContest({ id: contest.id, title: contest.title, budget: contest.budget });
+  };
+
+  const handleClosePayment = () => {
+    setPaymentContest(null);
+  };
+
+  const handlePaymentSuccess = () => {
+    setPaymentContest(null);
     window.location.reload();
   };
 
@@ -616,13 +644,22 @@ const ClientDashboard: React.FC<{
                         </div>
                         <div className="flex items-center gap-3">
                           <ContestStatusBadge status={contest.status} />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewProposals(contest)}
-                          >
-                            <Eye size={14} className="mr-1" /> Vedi proposte ({contest.proposalsCount || 0})
-                          </Button>
+                          {contest.status === 'PENDING_APPROVAL' ? (
+                            <Button
+                              size="sm"
+                              onClick={() => handlePayContest(contest)}
+                            >
+                              <CreditCard size={14} className="mr-1" /> Paga e pubblica
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewProposals(contest)}
+                            >
+                              <Eye size={14} className="mr-1" /> Vedi proposte ({contest.proposalsCount || 0})
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -698,6 +735,16 @@ const ClientDashboard: React.FC<{
           onWinnerSelected={handleWinnerSelected}
         />
       )}
+
+      {/* Payment Modal */}
+      {paymentContest && (
+        <PaymentModal
+          contest={paymentContest}
+          isOpen={true}
+          onClose={handleClosePayment}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   );
 };
@@ -744,7 +791,7 @@ const ProposalStatusBadge: React.FC<{ status: string }> = ({ status }) => {
 const ContestStatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles: Record<string, string> = {
     DRAFT: 'bg-gray-100 text-gray-800',
-    PENDING_APPROVAL: 'bg-amber-100 text-amber-800',
+    PENDING_APPROVAL: 'bg-blue-100 text-blue-800',
     OPEN: 'bg-green-100 text-green-800',
     EVALUATING: 'bg-yellow-100 text-yellow-800',
     CLOSED: 'bg-blue-100 text-blue-800',
@@ -752,7 +799,7 @@ const ContestStatusBadge: React.FC<{ status: string }> = ({ status }) => {
   };
   const labels: Record<string, string> = {
     DRAFT: 'Bozza',
-    PENDING_APPROVAL: 'In attesa approvazione',
+    PENDING_APPROVAL: 'In attesa pagamento',
     OPEN: 'Aperto',
     EVALUATING: 'In valutazione',
     CLOSED: 'Chiuso',

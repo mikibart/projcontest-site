@@ -557,14 +557,14 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
         Il tuo concorso "<span className="font-semibold text-neutral-text">{formData.title}</span>" è stato inviato con successo.
       </p>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-8 max-w-md mx-auto">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8 max-w-md mx-auto">
         <div className="flex items-center gap-3 mb-3">
-          <Clock size={24} className="text-amber-600" />
-          <h3 className="font-bold text-amber-800">In attesa di approvazione</h3>
+          <Clock size={24} className="text-blue-600" />
+          <h3 className="font-bold text-blue-800">Un ultimo passo</h3>
         </div>
-        <p className="text-sm text-amber-700 text-left">
-          Il nostro team verificherà il tuo concorso entro <strong>24 ore</strong>.
-          Riceverai una notifica quando sarà approvato e visibile agli architetti.
+        <p className="text-sm text-blue-700 text-left">
+          Per attivare il concorso, vai alla Dashboard e completa il pagamento della quota di pubblicazione (<strong>5% del budget</strong>).
+          Puoi pagare con carta di credito o PayPal (anche a rate).
         </p>
       </div>
 
@@ -573,15 +573,15 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
         <div className="space-y-3 text-left">
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">1</div>
-            <p className="text-sm text-neutral-muted">Il team verifica che il brief sia completo e chiaro</p>
+            <p className="text-sm text-neutral-muted">Vai alla Dashboard e clicca "Paga e pubblica"</p>
           </div>
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">2</div>
-            <p className="text-sm text-neutral-muted">Il concorso viene pubblicato e notificato agli architetti</p>
+            <p className="text-sm text-neutral-muted">Completa il pagamento con Stripe o PayPal</p>
           </div>
           <div className="flex items-start gap-3">
             <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">3</div>
-            <p className="text-sm text-neutral-muted">Ricevi le proposte e scegli il vincitore</p>
+            <p className="text-sm text-neutral-muted">Il concorso viene attivato e gli architetti possono partecipare</p>
           </div>
         </div>
       </div>

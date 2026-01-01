@@ -28,6 +28,7 @@ model User {
   files             File[]
   notifications     Notification[]
   refreshTokens     RefreshToken[]
+  payments          Payment[]
 }
 
 enum UserRole {
@@ -78,6 +79,7 @@ model Contest {
   proposals       Proposal[]
   files           File[]        @relation("ContestFiles")
   qaMessages      QAMessage[]
+  payments        Payment[]
 }
 
 enum Category {
@@ -256,4 +258,45 @@ enum NotificationType {
   PRACTICE_QUOTE
   PRACTICE_UPDATE
   SYSTEM
+  PAYMENT_REQUIRED
+  PAYMENT_RECEIVED
+}
+
+// ==================== PAYMENTS ====================
+model Payment {
+  id              String        @id @default(cuid())
+  amount          Float
+  currency        String        @default("EUR")
+  status          PaymentStatus @default(PENDING)
+  provider        PaymentProvider
+  providerPaymentId String?     @unique
+  providerOrderId   String?     @unique
+
+  // Relations
+  contestId       String
+  contest         Contest       @relation(fields: [contestId], references: [id])
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+
+  // Metadata
+  metadata        Json?
+
+  // Timestamps
+  createdAt       DateTime      @default(now())
+  paidAt          DateTime?
+  updatedAt       DateTime      @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYPAL
+  BANK_TRANSFER
 }
