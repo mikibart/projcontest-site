@@ -5,7 +5,8 @@ import {
   Search, Edit2, Trash2, Eye, CheckCircle, XCircle,
   AlertTriangle, Star, Clock, CreditCard, FileCheck,
   ChevronLeft, ChevronRight, X, Send, Euro, Calendar,
-  Filter, RefreshCw, HardDrive, ExternalLink, AlertCircle
+  Filter, RefreshCw, HardDrive, ExternalLink, AlertCircle,
+  Settings, Save, Key, ToggleLeft, ToggleRight, Percent
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -13,7 +14,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'contests' | 'practices' | 'payments' | 'proposals' | 'files'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'contests' | 'practices' | 'payments' | 'proposals' | 'files' | 'settings'>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState<any>(null);
@@ -25,6 +26,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
   const [files, setFiles] = useState<any[]>([]);
   const [filesStats, setFilesStats] = useState<{ orphanCount: number; totalStorage: number }>({ orphanCount: 0, totalStorage: 0 });
   const [user, setUser] = useState<any>(null);
+
+  // Settings state
+  const [settingsData, setSettingsData] = useState<Record<string, any>>({});
+  const [settingsForm, setSettingsForm] = useState<Record<string, string>>({});
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -464,7 +472,61 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
     { id: 'payments', label: 'Pagamenti', icon: CreditCard },
     { id: 'proposals', label: 'Proposte', icon: FileText },
     { id: 'files', label: 'Files', icon: HardDrive },
+    { id: 'settings', label: 'Impostazioni', icon: Settings },
   ];
+
+  // Fetch settings
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const response = await fetch('/api/settings', { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setSettingsData(data.settings || {});
+        // Initialize form with non-sensitive values
+        const formValues: Record<string, string> = {};
+        Object.keys(data.settings || {}).forEach(key => {
+          formValues[key] = data.settings[key].hasValue && !key.includes('SECRET') ? data.settings[key].value : '';
+        });
+        setSettingsForm(formValues);
+      }
+    } catch (err) {
+      console.error('Error fetching settings:', err);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  // Save settings
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsMessage(null);
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ settings: settingsForm }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSettingsMessage({ type: 'success', text: `Salvate ${data.updated?.length || 0} impostazioni` });
+        fetchSettings(); // Refresh to get updated masked values
+      } else {
+        setSettingsMessage({ type: 'error', text: data.error || 'Errore nel salvataggio' });
+      }
+    } catch (err) {
+      setSettingsMessage({ type: 'error', text: 'Errore di connessione' });
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  // Load settings when tab changes to settings
+  useEffect(() => {
+    if (activeTab === 'settings' && user?.role === 'ADMIN') {
+      fetchSettings();
+    }
+  }, [activeTab]);
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -909,8 +971,224 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
           </div>
         )}
 
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="space-y-8">
+            {settingsLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="animate-spin" size={32} />
+              </div>
+            ) : (
+              <>
+                {/* Settings Message */}
+                {settingsMessage && (
+                  <div className={`p-4 rounded-lg ${settingsMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                    {settingsMessage.text}
+                  </div>
+                )}
+
+                {/* Stripe Settings */}
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-gray-100 bg-purple-50">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-100 rounded-lg">
+                        <CreditCard className="text-purple-600" size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg">Stripe</h3>
+                        <p className="text-sm text-neutral-muted">Pagamenti con carta di credito</p>
+                      </div>
+                      <div className="ml-auto">
+                        <button
+                          onClick={() => setSettingsForm(prev => ({ ...prev, STRIPE_ENABLED: prev.STRIPE_ENABLED === 'true' ? 'false' : 'true' }))}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                            settingsForm.STRIPE_ENABLED === 'true' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {settingsForm.STRIPE_ENABLED === 'true' ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                          {settingsForm.STRIPE_ENABLED === 'true' ? 'Attivo' : 'Disattivo'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-text mb-1">
+                        Publishable Key
+                        {settingsData.STRIPE_PUBLISHABLE_KEY?.hasValue && <span className="text-green-600 ml-2 text-xs">✓ Configurata</span>}
+                      </label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                          type="text"
+                          value={settingsForm.STRIPE_PUBLISHABLE_KEY || ''}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, STRIPE_PUBLISHABLE_KEY: e.target.value }))}
+                          placeholder="pk_live_..."
+                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-text mb-1">
+                        Secret Key
+                        {settingsData.STRIPE_SECRET_KEY?.hasValue && <span className="text-green-600 ml-2 text-xs">✓ Configurata</span>}
+                      </label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                          type="password"
+                          value={settingsForm.STRIPE_SECRET_KEY || ''}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, STRIPE_SECRET_KEY: e.target.value }))}
+                          placeholder={settingsData.STRIPE_SECRET_KEY?.hasValue ? '••••••••' : 'sk_live_...'}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none font-mono text-sm"
+                        />
+                      </div>
+                      <p className="text-xs text-neutral-muted mt-1">Lascia vuoto per mantenere il valore esistente</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-text mb-1">
+                        Webhook Secret
+                        {settingsData.STRIPE_WEBHOOK_SECRET?.hasValue && <span className="text-green-600 ml-2 text-xs">✓ Configurata</span>}
+                      </label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                          type="password"
+                          value={settingsForm.STRIPE_WEBHOOK_SECRET || ''}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, STRIPE_WEBHOOK_SECRET: e.target.value }))}
+                          placeholder={settingsData.STRIPE_WEBHOOK_SECRET?.hasValue ? '••••••••' : 'whsec_...'}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg text-xs text-neutral-muted">
+                      <p className="font-medium mb-1">Webhook URL:</p>
+                      <code className="bg-white px-2 py-1 rounded border">https://projcontest-site.vercel.app/api/webhooks/stripe</code>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PayPal Settings */}
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-gray-100 bg-blue-50">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <CreditCard className="text-blue-600" size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg">PayPal</h3>
+                        <p className="text-sm text-neutral-muted">Pagamenti PayPal e Paga in 3 rate</p>
+                      </div>
+                      <div className="ml-auto flex gap-2">
+                        <button
+                          onClick={() => setSettingsForm(prev => ({ ...prev, PAYPAL_SANDBOX_MODE: prev.PAYPAL_SANDBOX_MODE === 'true' ? 'false' : 'true' }))}
+                          className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                            settingsForm.PAYPAL_SANDBOX_MODE === 'true' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                          }`}
+                        >
+                          {settingsForm.PAYPAL_SANDBOX_MODE === 'true' ? 'Sandbox' : 'Live'}
+                        </button>
+                        <button
+                          onClick={() => setSettingsForm(prev => ({ ...prev, PAYPAL_ENABLED: prev.PAYPAL_ENABLED === 'true' ? 'false' : 'true' }))}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                            settingsForm.PAYPAL_ENABLED === 'true' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {settingsForm.PAYPAL_ENABLED === 'true' ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                          {settingsForm.PAYPAL_ENABLED === 'true' ? 'Attivo' : 'Disattivo'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-text mb-1">
+                        Client ID
+                        {settingsData.PAYPAL_CLIENT_ID?.hasValue && <span className="text-green-600 ml-2 text-xs">✓ Configurato</span>}
+                      </label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                          type="text"
+                          value={settingsForm.PAYPAL_CLIENT_ID || ''}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, PAYPAL_CLIENT_ID: e.target.value }))}
+                          placeholder="AV..."
+                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-text mb-1">
+                        Client Secret
+                        {settingsData.PAYPAL_CLIENT_SECRET?.hasValue && <span className="text-green-600 ml-2 text-xs">✓ Configurato</span>}
+                      </label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                          type="password"
+                          value={settingsForm.PAYPAL_CLIENT_SECRET || ''}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, PAYPAL_CLIENT_SECRET: e.target.value }))}
+                          placeholder={settingsData.PAYPAL_CLIENT_SECRET?.hasValue ? '••••••••' : 'EK...'}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none font-mono text-sm"
+                        />
+                      </div>
+                      <p className="text-xs text-neutral-muted mt-1">Lascia vuoto per mantenere il valore esistente</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Platform Settings */}
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="p-4 border-b border-gray-100 bg-green-50">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <Percent className="text-green-600" size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg">Piattaforma</h3>
+                        <p className="text-sm text-neutral-muted">Commissioni e impostazioni generali</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-text mb-1">
+                        Commissione Piattaforma (%)
+                      </label>
+                      <div className="relative">
+                        <Percent className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={settingsForm.PLATFORM_FEE_PERCENT || '5'}
+                          onChange={(e) => setSettingsForm(prev => ({ ...prev, PLATFORM_FEE_PERCENT: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-400 outline-none"
+                        />
+                      </div>
+                      <p className="text-xs text-neutral-muted mt-1">Percentuale applicata sul budget del concorso come quota di pubblicazione</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <Button onClick={saveSettings} disabled={settingsSaving} className="min-w-[200px]">
+                    {settingsSaving ? (
+                      <><Loader2 size={18} className="mr-2 animate-spin" /> Salvataggio...</>
+                    ) : (
+                      <><Save size={18} className="mr-2" /> Salva Impostazioni</>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Pagination */}
-        {activeTab !== 'overview' && totalPages > 1 && (
+        {activeTab !== 'overview' && activeTab !== 'settings' && totalPages > 1 && (
           <div className="flex justify-center items-center gap-4 mt-6">
             <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
               <ChevronLeft size={16} /> Precedente

@@ -1,15 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
+import { getPaymentSettings } from '../lib/settings';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
-
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || '';
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || '';
-const PAYPAL_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://api-m.paypal.com'
-  : 'https://api-m.sandbox.paypal.com';
 
 function getTokenFromHeader(authHeader: string | null): string | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -24,10 +19,11 @@ function verifyAccessToken(token: string): any {
   }
 }
 
-async function getPayPalAccessToken(): Promise<string> {
-  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString('base64');
+async function getPayPalAccessToken(clientId: string, clientSecret: string, sandboxMode: boolean): Promise<string> {
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+  const baseUrl = sandboxMode ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 
-  const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
+  const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${auth}`,
@@ -59,6 +55,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 async function createOrder(req: VercelRequest, res: VercelResponse) {
   try {
+    // Get payment settings from database
+    const settings = await getPaymentSettings();
+
+    // Check if PayPal is enabled
+    if (!settings.paypal.enabled) {
+      return res.status(400).json({ error: 'PayPal payments are not enabled' });
+    }
+
+    // Check if PayPal is configured
+    if (!settings.paypal.clientId || !settings.paypal.clientSecret) {
+      return res.status(500).json({ error: 'PayPal is not configured' });
+    }
+
+    const PAYPAL_BASE_URL = settings.paypal.sandboxMode
+      ? 'https://api-m.sandbox.paypal.com'
+      : 'https://api-m.paypal.com';
+
     // Verify auth
     const token = getTokenFromHeader(req.headers.authorization || null);
     if (!token) {
@@ -108,10 +121,15 @@ async function createOrder(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Payment already exists for this contest' });
     }
 
-    // Calculate platform fee (5% of budget)
-    const platformFee = (contest.budget * 0.05).toFixed(2);
+    // Calculate platform fee using settings
+    const feePercent = settings.platformFeePercent / 100;
+    const platformFee = (contest.budget * feePercent).toFixed(2);
 
-    const accessToken = await getPayPalAccessToken();
+    const accessToken = await getPayPalAccessToken(
+      settings.paypal.clientId,
+      settings.paypal.clientSecret,
+      settings.paypal.sandboxMode
+    );
 
     // Create PayPal order with Pay Later option enabled
     const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
@@ -198,6 +216,17 @@ async function captureOrder(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Order ID is required' });
     }
 
+    // Get payment settings from database
+    const settings = await getPaymentSettings();
+
+    if (!settings.paypal.clientId || !settings.paypal.clientSecret) {
+      return res.status(500).json({ error: 'PayPal is not configured' });
+    }
+
+    const PAYPAL_BASE_URL = settings.paypal.sandboxMode
+      ? 'https://api-m.sandbox.paypal.com'
+      : 'https://api-m.paypal.com';
+
     // Find the payment record
     const payment = await prisma.payment.findFirst({
       where: {
@@ -211,7 +240,11 @@ async function captureOrder(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Payment not found' });
     }
 
-    const accessToken = await getPayPalAccessToken();
+    const accessToken = await getPayPalAccessToken(
+      settings.paypal.clientId,
+      settings.paypal.clientSecret,
+      settings.paypal.sandboxMode
+    );
 
     // Capture the order
     const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`, {

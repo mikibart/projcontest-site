@@ -2,13 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { PrismaClient } from '@prisma/client';
 import Stripe from 'stripe';
 import jwt from 'jsonwebtoken';
+import { getPaymentSettings } from '../lib/settings';
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-12-15.clover',
-});
 
 function getTokenFromHeader(authHeader: string | null): string | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
@@ -33,6 +30,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 async function createCheckoutSession(req: VercelRequest, res: VercelResponse) {
   try {
+    // Get payment settings from database
+    const settings = await getPaymentSettings();
+
+    // Check if Stripe is enabled
+    if (!settings.stripe.enabled) {
+      return res.status(400).json({ error: 'Stripe payments are not enabled' });
+    }
+
+    // Check if Stripe is configured
+    if (!settings.stripe.secretKey) {
+      return res.status(500).json({ error: 'Stripe is not configured' });
+    }
+
+    // Initialize Stripe with settings from database
+    const stripe = new Stripe(settings.stripe.secretKey, {
+      apiVersion: '2025-12-15.clover',
+    });
+
     // Verify auth
     const token = getTokenFromHeader(req.headers.authorization || null);
     if (!token) {
@@ -82,8 +97,9 @@ async function createCheckoutSession(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Payment already exists for this contest' });
     }
 
-    // Calculate platform fee (e.g., 5% of budget)
-    const platformFee = Math.round(contest.budget * 0.05 * 100); // In cents
+    // Calculate platform fee using settings
+    const feePercent = settings.platformFeePercent / 100;
+    const platformFee = Math.round(contest.budget * feePercent * 100); // In cents
     const amountInCents = platformFee;
 
     // Create Stripe Checkout Session
