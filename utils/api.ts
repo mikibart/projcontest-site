@@ -98,6 +98,29 @@ export function isLoggedIn(): boolean {
   return !!localStorage.getItem('accessToken');
 }
 
+export async function getValidAccessToken(): Promise<string | null> {
+  let accessToken = localStorage.getItem('accessToken');
+  if (!accessToken) return null;
+
+  // Try a simple validation request, if it fails, refresh
+  try {
+    const res = await fetch('/api/user/me', {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+    });
+
+    if (res.status === 401) {
+      // Token expired, try to refresh
+      const newToken = await refreshAccessToken();
+      return newToken;
+    }
+
+    return accessToken;
+  } catch {
+    // On network error, return current token and let the caller handle it
+    return accessToken;
+  }
+}
+
 export function logout() {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');

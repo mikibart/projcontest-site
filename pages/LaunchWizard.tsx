@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '../components/Button';
 import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Loader2, X, FileText, Image, CheckCircle, PartyPopper, Clock, Eye } from 'lucide-react';
-import { apiFetch, isLoggedIn } from '../utils/api';
+import { apiFetch, isLoggedIn, getValidAccessToken } from '../utils/api';
 
 interface UploadedFile {
   id: string;
@@ -127,7 +127,16 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
     setIsUploading(true);
     setError(null);
 
-    const token = localStorage.getItem('accessToken');
+    // Get a valid token (refresh if expired)
+    const token = await getValidAccessToken();
+    if (!token) {
+      setError('Sessione scaduta. Effettua nuovamente il login.');
+      setIsUploading(false);
+      if (onLoginRequired) {
+        onLoginRequired();
+      }
+      return;
+    }
 
     for (const file of Array.from(files)) {
       // Validate file size (max 50MB)
