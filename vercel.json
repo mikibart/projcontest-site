@@ -1,11 +1,6 @@
 {
   "buildCommand": "npx prisma generate && npm run build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/**/*.ts": {
-      "runtime": "@vercel/node@3"
-    }
-  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/" }
   ]
