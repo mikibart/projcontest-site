@@ -36,7 +36,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         body: JSON.stringify(body),
       });
 
-      const data = await response.json();
+      // Check if response has content before parsing
+      const text = await response.text();
+      if (!text) {
+        throw new Error('Il server non ha risposto. Verifica la connessione al database.');
+      }
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error('Risposta non valida dal server. Riprova più tardi.');
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Errore durante l\'autenticazione');

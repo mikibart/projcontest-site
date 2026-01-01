@@ -3,26 +3,48 @@ import { PrismaClient } from '@prisma/client';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-const prisma = new PrismaClient();
+// Singleton pattern for Prisma in serverless
+declare global {
+  var prisma: PrismaClient | undefined;
+}
+
+const prisma = global.prisma || new PrismaClient();
+if (process.env.NODE_ENV !== 'production') {
+  global.prisma = prisma;
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Check DATABASE_URL early
+  if (!process.env.DATABASE_URL) {
+    return res.status(500).json({ error: 'DATABASE_URL non configurato nel server' });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { action } = req.query;
 
-  switch (action) {
-    case 'login':
-      return handleLogin(req, res);
-    case 'register':
-      return handleRegister(req, res);
-    case 'refresh':
-      return handleRefresh(req, res);
-    default:
-      return res.status(404).json({ error: 'Unknown action' });
+  try {
+    switch (action) {
+      case 'login':
+        return await handleLogin(req, res);
+      case 'register':
+        return await handleRegister(req, res);
+      case 'refresh':
+        return await handleRefresh(req, res);
+      default:
+        return res.status(404).json({ error: 'Unknown action' });
+    }
+  } catch (error: any) {
+    console.error('Auth handler error:', error);
+    return res.status(500).json({
+      error: 'Errore del server',
+      details: process.env.NODE_ENV !== 'production' ? error.message : undefined
+    });
   }
 }
 
