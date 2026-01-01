@@ -202,6 +202,7 @@ const App: React.FC = () => {
                 handleNavigate('DASHBOARD');
              }}
              onCancel={() => handleNavigate('PRACTICES')}
+             onLoginRequired={() => setIsLoginModalOpen(true)}
           />
         )}
         {currentPage === 'LAUNCH_WIZARD' && (

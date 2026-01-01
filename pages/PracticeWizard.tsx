@@ -1,25 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
 import { PracticeType } from '../types';
 import {
   ArrowLeft, ArrowRight, Check, UploadCloud,
   FileText, HardHat, Scale, Ruler, Zap, Scroll, MapPin,
   FileSearch, Siren, Construction, Landmark, AlertTriangle,
-  Activity, Droplets, ShieldAlert, Calculator, BookOpen, Loader2
+  Activity, Droplets, ShieldAlert, Calculator, BookOpen, Loader2, LogIn
 } from 'lucide-react';
-import { apiFetch } from '../utils/api';
+import { apiFetch, isLoggedIn } from '../utils/api';
 
 interface PracticeWizardProps {
   onComplete: () => void;
   onCancel: () => void;
+  onLoginRequired?: () => void;
 }
 
-export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCancel }) => {
-  const [step, setStep] = useState(1);
+export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCancel, onLoginRequired }) => {
+  const [step, setStep] = useState(0); // Start at 0 for auth check
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const totalSteps = 5;
-  const progress = (step / totalSteps) * 100;
+  const progress = step === 0 ? 0 : (step / totalSteps) * 100;
+
+  // Check authentication on mount
+  useEffect(() => {
+    if (isLoggedIn()) {
+      setStep(1); // Skip to first real step if logged in
+    }
+  }, []);
 
   // State for Category Selection in Step 1
   const [activeCategory, setActiveCategory] = useState<'admin' | 'structure' | 'systems' | 'special'>('admin');
@@ -77,6 +85,34 @@ export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCa
 
     onComplete();
   };
+
+  // LOGIN REQUIRED STEP
+  const renderLoginRequired = () => (
+    <div className="animate-fade-in text-center py-8">
+      <div className="w-20 h-20 bg-secondary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+        <LogIn size={36} className="text-secondary" />
+      </div>
+
+      <h2 className="text-2xl font-display font-bold mb-4 text-neutral-text">
+        Accedi per continuare
+      </h2>
+
+      <p className="text-neutral-muted mb-8 max-w-md mx-auto">
+        Per richiedere un servizio tecnico devi prima effettuare l'accesso o creare un account.
+        È veloce e gratuito!
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <Button onClick={() => onLoginRequired?.()} className="min-w-[180px]">
+          <LogIn size={18} className="mr-2" />
+          Accedi / Registrati
+        </Button>
+        <Button variant="secondary" onClick={onCancel} className="min-w-[180px]">
+          Torna indietro
+        </Button>
+      </div>
+    </div>
+  );
 
   // STEP 1: CATEGORIZED SELECTION
   const renderStep1 = () => {
@@ -333,21 +369,25 @@ export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCa
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <div className="mb-8">
-        <div className="flex justify-between text-sm font-medium text-neutral-muted mb-2">
-          <span>Richiesta Servizio Tecnico</span>
-          <span className="text-primary font-bold">Step {step}/{totalSteps}</span>
+      {/* Stepper Header - hidden on login step */}
+      {step > 0 && (
+        <div className="mb-8">
+          <div className="flex justify-between text-sm font-medium text-neutral-muted mb-2">
+            <span>Richiesta Servizio Tecnico</span>
+            <span className="text-primary font-bold">Step {step}/{totalSteps}</span>
+          </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-secondary transition-all duration-300 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-secondary transition-all duration-300 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-100 min-h-[550px] flex flex-col justify-between">
         <div>
+          {step === 0 && renderLoginRequired()}
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
@@ -355,22 +395,26 @@ export const PracticeWizard: React.FC<PracticeWizardProps> = ({ onComplete, onCa
           {step === 5 && renderStep5()}
         </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
-          </div>
-        )}
+        {step > 0 && (
+          <>
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
+              </div>
+            )}
 
-        <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
-          <Button variant="ghost" onClick={step === 1 ? onCancel : handleBack} disabled={isSubmitting}>
-            {step === 1 ? 'Annulla' : 'Indietro'}
-          </Button>
-          <Button onClick={step === totalSteps ? handleSubmit : handleNext} disabled={isSubmitting}>
-            {isSubmitting ? (
-              <><Loader2 size={18} className="mr-2 animate-spin" /> Invio...</>
-            ) : step === totalSteps ? 'Invia Richiesta' : 'Continua'}
-          </Button>
-        </div>
+            <div className="flex justify-between mt-8 pt-6 border-t border-gray-100">
+              <Button variant="ghost" onClick={step === 1 ? onCancel : handleBack} disabled={isSubmitting}>
+                {step === 1 ? 'Annulla' : 'Indietro'}
+              </Button>
+              <Button onClick={step === totalSteps ? handleSubmit : handleNext} disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <><Loader2 size={18} className="mr-2 animate-spin" /> Invio...</>
+                ) : step === totalSteps ? 'Invia Richiesta' : 'Continua'}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

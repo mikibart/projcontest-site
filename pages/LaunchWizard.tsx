@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '../components/Button';
-import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Loader2, X, FileText, Image, CheckCircle, PartyPopper, Clock, Eye } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Loader2, X, FileText, Image, CheckCircle, PartyPopper, Clock, Eye, LogIn } from 'lucide-react';
 import { apiFetch, isLoggedIn, getValidAccessToken } from '../utils/api';
 
 interface UploadedFile {
@@ -18,7 +18,7 @@ interface WizardProps {
 }
 
 export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLoginRequired }) => {
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0); // Start at 0 for auth check
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +36,14 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
   });
 
   const totalSteps = 6;
-  const progress = publishedContest ? 100 : (step / totalSteps) * 100;
+  const progress = publishedContest ? 100 : step === 0 ? 0 : (step / totalSteps) * 100;
+
+  // Check authentication on mount
+  useEffect(() => {
+    if (isLoggedIn()) {
+      setStep(1); // Skip to first real step if logged in
+    }
+  }, []);
 
   const handleNext = () => setStep(prev => Math.min(prev + 1, totalSteps));
   const handleBack = () => setStep(prev => Math.max(prev - 1, 1));
@@ -198,6 +205,33 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
     if (mimeType === 'application/pdf') return <FileText size={20} className="text-red-600" />;
     return <FileText size={20} className="text-gray-600" />;
   };
+
+  const renderLoginRequired = () => (
+    <div className="animate-fade-in text-center py-8">
+      <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+        <LogIn size={36} className="text-primary" />
+      </div>
+
+      <h2 className="text-2xl font-display font-bold mb-4 text-neutral-text">
+        Accedi per continuare
+      </h2>
+
+      <p className="text-neutral-muted mb-8 max-w-md mx-auto">
+        Per lanciare un concorso devi prima effettuare l'accesso o creare un account.
+        È veloce e gratuito!
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-4 justify-center">
+        <Button onClick={() => onLoginRequired?.()} className="min-w-[180px]">
+          <LogIn size={18} className="mr-2" />
+          Accedi / Registrati
+        </Button>
+        <Button variant="secondary" onClick={onCancel} className="min-w-[180px]">
+          Torna alla Home
+        </Button>
+      </div>
+    </div>
+  );
 
   const renderStep1 = () => (
     <div className="animate-fade-in">
@@ -629,22 +663,25 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
-      {/* Stepper Header */}
-      <div className="mb-8">
-        <div className="flex justify-between text-sm font-medium text-neutral-muted mb-2">
-          <span>Step {step} di {totalSteps}</span>
-          <span className="text-primary font-bold">{Math.round(progress)}% Completato</span>
+      {/* Stepper Header - hidden on login step */}
+      {step > 0 && (
+        <div className="mb-8">
+          <div className="flex justify-between text-sm font-medium text-neutral-muted mb-2">
+            <span>Step {step} di {totalSteps}</span>
+            <span className="text-primary font-bold">{Math.round(progress)}% Completato</span>
+          </div>
+          <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(30,58,95,0.3)]"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
-        <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(30,58,95,0.3)]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       <div className="bg-white rounded-2xl p-6 md:p-10 shadow-xl border border-gray-100 min-h-[500px] flex flex-col justify-between">
         <div>
+          {step === 0 && renderLoginRequired()}
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
@@ -653,34 +690,38 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
           {step === 6 && renderStep6()}
         </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        <div className="flex justify-between mt-12 pt-6 border-t border-gray-100">
-          <Button
-            variant="ghost"
-            onClick={step === 1 ? onCancel : handleBack}
-            className="text-neutral-muted hover:text-neutral-text"
-            disabled={isSubmitting}
-          >
-            {step === 1 ? 'Annulla' : 'Indietro'}
-          </Button>
-
-          <Button
-            onClick={step === totalSteps ? handleSubmit : handleNext}
-            className="min-w-[140px] shadow-lg shadow-primary/20"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <><Loader2 size={18} className="mr-2 animate-spin" /> Pubblicazione...</>
-            ) : step === totalSteps ? 'Pubblica Ora' : (
-              <>Continua <ArrowRight size={18} className="ml-2" /></>
+        {step > 0 && (
+          <>
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
+              </div>
             )}
-          </Button>
-        </div>
+
+            <div className="flex justify-between mt-12 pt-6 border-t border-gray-100">
+              <Button
+                variant="ghost"
+                onClick={step === 1 ? onCancel : handleBack}
+                className="text-neutral-muted hover:text-neutral-text"
+                disabled={isSubmitting}
+              >
+                {step === 1 ? 'Annulla' : 'Indietro'}
+              </Button>
+
+              <Button
+                onClick={step === totalSteps ? handleSubmit : handleNext}
+                className="min-w-[140px] shadow-lg shadow-primary/20"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <><Loader2 size={18} className="mr-2 animate-spin" /> Pubblicazione...</>
+                ) : step === totalSteps ? 'Pubblica Ora' : (
+                  <>Continua <ArrowRight size={18} className="ml-2" /></>
+                )}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
