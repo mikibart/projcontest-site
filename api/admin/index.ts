@@ -58,8 +58,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handlePayments(req, res);
     case 'proposals':
       return handleProposals(req, res);
+    case 'contest-detail':
+      return getContestDetail(req, res);
+    case 'user-detail':
+      return getUserDetail(req, res);
     default:
-      return res.status(400).json({ error: 'Invalid action. Use ?action=stats|users|contests|practices|payments|proposals' });
+      return res.status(400).json({ error: 'Invalid action' });
   }
 }
 
@@ -563,6 +567,125 @@ async function deleteProposal(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error('Delete proposal error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// ==================== DETAIL VIEWS ====================
+async function getContestDetail(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: 'Contest ID required' });
+
+    const contest = await prisma.contest.findUnique({
+      where: { id: id.toString() },
+      include: {
+        client: {
+          select: { id: true, name: true, email: true, phone: true, avatarUrl: true },
+        },
+        proposals: {
+          include: {
+            architect: {
+              select: { id: true, name: true, email: true, avatarUrl: true, bio: true, portfolio: true },
+            },
+            files: true,
+          },
+          orderBy: { submittedAt: 'desc' },
+        },
+        files: true,
+        qaMessages: {
+          orderBy: { createdAt: 'desc' },
+        },
+        payments: {
+          include: {
+            user: { select: { name: true, email: true } },
+          },
+        },
+      },
+    });
+
+    if (!contest) {
+      return res.status(404).json({ error: 'Contest not found' });
+    }
+
+    return res.status(200).json(contest);
+  } catch (error) {
+    console.error('Get contest detail error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function getUserDetail(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: 'User ID required' });
+
+    const user = await prisma.user.findUnique({
+      where: { id: id.toString() },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        avatarUrl: true,
+        bio: true,
+        portfolio: true,
+        phone: true,
+        createdAt: true,
+        contests: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            budget: true,
+            createdAt: true,
+            _count: { select: { proposals: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        proposals: {
+          include: {
+            contest: { select: { id: true, title: true } },
+            files: true,
+          },
+          orderBy: { submittedAt: 'desc' },
+          take: 10,
+        },
+        practiceRequests: {
+          include: { files: true },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        payments: {
+          include: {
+            contest: { select: { title: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+        files: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    return res.status(200).json(user);
+  } catch (error) {
+    console.error('Get user detail error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

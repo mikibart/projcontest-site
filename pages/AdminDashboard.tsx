@@ -34,6 +34,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
 
   // Modals
   const [detailModal, setDetailModal] = useState<{ type: string; data: any } | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [contestDetail, setContestDetail] = useState<any>(null);
+  const [userDetail, setUserDetail] = useState<any>(null);
   const [quoteModal, setQuoteModal] = useState<any>(null);
   const [quoteAmount, setQuoteAmount] = useState('');
   const [quoteValidDays, setQuoteValidDays] = useState('30');
@@ -317,6 +320,51 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
     }
   };
 
+  // ==================== DETAIL FETCH ====================
+  const openContestDetail = async (contestId: string) => {
+    setDetailModal({ type: 'contest', data: null });
+    setDetailLoading(true);
+    setContestDetail(null);
+    try {
+      const response = await fetch(`/api/admin?action=contest-detail&id=${contestId}`, {
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setContestDetail(data);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const openUserDetail = async (userId: string) => {
+    setDetailModal({ type: 'user', data: null });
+    setDetailLoading(true);
+    setUserDetail(null);
+    try {
+      const response = await fetch(`/api/admin?action=user-detail&id=${userId}`, {
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUserDetail(data);
+      }
+    } catch (err) {
+      console.error('Error:', err);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeDetailModal = () => {
+    setDetailModal(null);
+    setContestDetail(null);
+    setUserDetail(null);
+  };
+
   // Not logged in or not admin
   if (!user || user.role !== 'ADMIN') {
     return (
@@ -555,7 +603,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
                 <td className="px-4 py-3 text-xs text-neutral-muted">{new Date(u.createdAt).toLocaleDateString('it-IT')}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setDetailModal({ type: 'user', data: u })}><Eye size={14} /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => openUserDetail(u.id)}><Eye size={14} /></Button>
                     <Button variant="ghost" size="sm" onClick={() => deleteUser(u.id, u.name)} className="text-red-500 hover:bg-red-50"><Trash2 size={14} /></Button>
                   </div>
                 </td>
@@ -591,7 +639,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => setDetailModal({ type: 'contest', data: c })}><Eye size={14} /></Button>
+                    <Button variant="ghost" size="sm" onClick={() => openContestDetail(c.id)}><Eye size={14} /></Button>
                     <Button variant="ghost" size="sm" onClick={() => deleteContest(c.id, c.title)} className="text-red-500 hover:bg-red-50"><Trash2 size={14} /></Button>
                   </div>
                 </td>
@@ -711,12 +759,340 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLoginClick }) 
         )}
       </div>
 
-      {/* Detail Modal */}
-      {detailModal && (
-        <Modal onClose={() => setDetailModal(null)} title={`Dettagli ${detailModal.type}`}>
-          <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-xs max-h-96">
-            {JSON.stringify(detailModal.data, null, 2)}
-          </pre>
+      {/* Contest Detail Modal */}
+      {detailModal?.type === 'contest' && (
+        <Modal onClose={closeDetailModal} title="Dettagli Concorso" size="xl">
+          {detailLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={32} /></div>
+          ) : contestDetail ? (
+            <div className="space-y-6">
+              {/* Contest Info */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-bold text-lg mb-2">{contestDetail.title}</h4>
+                <p className="text-sm text-neutral-muted mb-2">{contestDetail.location}</p>
+                <div className="flex gap-4 text-sm">
+                  <span>Budget: <strong>€{contestDetail.budget?.toLocaleString()}</strong></span>
+                  <span>Stato: <StatusBadge status={contestDetail.status} /></span>
+                </div>
+              </div>
+
+              {/* Client */}
+              <div>
+                <h5 className="font-semibold mb-2 flex items-center gap-2"><Users size={16} /> Cliente</h5>
+                <div className="bg-white border rounded-lg p-3">
+                  <p className="font-medium">{contestDetail.client?.name}</p>
+                  <p className="text-sm text-neutral-muted">{contestDetail.client?.email}</p>
+                  {contestDetail.client?.phone && <p className="text-sm text-neutral-muted">{contestDetail.client?.phone}</p>}
+                </div>
+              </div>
+
+              {/* Proposals */}
+              <div>
+                <h5 className="font-semibold mb-2 flex items-center gap-2"><FileText size={16} /> Proposte Ricevute ({contestDetail.proposals?.length || 0})</h5>
+                {contestDetail.proposals?.length > 0 ? (
+                  <div className="space-y-3 max-h-64 overflow-auto">
+                    {contestDetail.proposals.map((p: any) => (
+                      <div key={p.id} className="bg-white border rounded-lg p-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            {p.architect?.avatarUrl && <img src={p.architect.avatarUrl} className="w-10 h-10 rounded-full" />}
+                            <div>
+                              <p className="font-medium">{p.architect?.name}</p>
+                              <p className="text-xs text-neutral-muted">{p.architect?.email}</p>
+                            </div>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded ${getProposalStatusStyle(p.status)}`}>{p.status}</span>
+                        </div>
+                        {p.description && <p className="text-sm mt-2 text-neutral-muted">{p.description}</p>}
+                        {p.files?.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {p.files.map((f: any) => (
+                              <a key={f.id} href={f.url} target="_blank" className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100">
+                                {f.originalName}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-neutral-muted mt-2">Inviata: {new Date(p.submittedAt).toLocaleDateString('it-IT')}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-muted">Nessuna proposta ricevuta</p>
+                )}
+              </div>
+
+              {/* Contest Files */}
+              {contestDetail.files?.length > 0 && (
+                <div>
+                  <h5 className="font-semibold mb-2 flex items-center gap-2"><FileCheck size={16} /> File del Concorso</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {contestDetail.files.map((f: any) => (
+                      <a key={f.id} href={f.url} target="_blank" className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200">
+                        {f.originalName}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Q&A */}
+              {contestDetail.qaMessages?.length > 0 && (
+                <div>
+                  <h5 className="font-semibold mb-2">Domande & Risposte ({contestDetail.qaMessages.length})</h5>
+                  <div className="space-y-2 max-h-32 overflow-auto">
+                    {contestDetail.qaMessages.map((q: any) => (
+                      <div key={q.id} className="bg-white border rounded-lg p-2 text-sm">
+                        <p><strong>D:</strong> {q.question}</p>
+                        {q.answer && <p className="text-neutral-muted"><strong>R:</strong> {q.answer}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-neutral-muted">Errore nel caricamento</p>
+          )}
+        </Modal>
+      )}
+
+      {/* User Detail Modal */}
+      {detailModal?.type === 'user' && (
+        <Modal onClose={closeDetailModal} title="Dettagli Utente" size="xl">
+          {detailLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={32} /></div>
+          ) : userDetail ? (
+            <div className="space-y-6">
+              {/* User Info */}
+              <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-4">
+                {userDetail.avatarUrl && <img src={userDetail.avatarUrl} className="w-16 h-16 rounded-full" />}
+                <div>
+                  <h4 className="font-bold text-lg">{userDetail.name}</h4>
+                  <p className="text-sm text-neutral-muted">{userDetail.email}</p>
+                  <div className="flex gap-2 mt-1">
+                    <RoleBadge role={userDetail.role} />
+                    {userDetail.phone && <span className="text-xs text-neutral-muted">{userDetail.phone}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {userDetail.bio && (
+                <div>
+                  <h5 className="font-semibold mb-1">Bio</h5>
+                  <p className="text-sm text-neutral-muted">{userDetail.bio}</p>
+                </div>
+              )}
+
+              {/* User's Contests */}
+              {userDetail.contests?.length > 0 && (
+                <div>
+                  <h5 className="font-semibold mb-2 flex items-center gap-2"><Briefcase size={16} /> Concorsi Creati ({userDetail.contests.length})</h5>
+                  <div className="space-y-2 max-h-40 overflow-auto">
+                    {userDetail.contests.map((c: any) => (
+                      <div key={c.id} className="bg-white border rounded-lg p-2 flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-sm">{c.title}</p>
+                          <p className="text-xs text-neutral-muted">€{c.budget?.toLocaleString()} • {c._count?.proposals || 0} proposte</p>
+                        </div>
+                        <StatusBadge status={c.status} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* User's Proposals */}
+              {userDetail.proposals?.length > 0 && (
+                <div>
+                  <h5 className="font-semibold mb-2 flex items-center gap-2"><FileText size={16} /> Proposte Inviate ({userDetail.proposals.length})</h5>
+                  <div className="space-y-2 max-h-40 overflow-auto">
+                    {userDetail.proposals.map((p: any) => (
+                      <div key={p.id} className="bg-white border rounded-lg p-2">
+                        <div className="flex justify-between items-center">
+                          <p className="font-medium text-sm">{p.contest?.title}</p>
+                          <span className={`text-xs px-2 py-1 rounded ${getProposalStatusStyle(p.status)}`}>{p.status}</span>
+                        </div>
+                        {p.files?.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {p.files.map((f: any) => (
+                              <a key={f.id} href={f.url} target="_blank" className="text-xs text-blue-600 hover:underline">
+                                {f.originalName}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* User's Practice Requests */}
+              {userDetail.practiceRequests?.length > 0 && (
+                <div>
+                  <h5 className="font-semibold mb-2 flex items-center gap-2"><FileCheck size={16} /> Richieste Pratiche ({userDetail.practiceRequests.length})</h5>
+                  <div className="space-y-2 max-h-40 overflow-auto">
+                    {userDetail.practiceRequests.map((p: any) => (
+                      <div key={p.id} className="bg-white border rounded-lg p-2 flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-sm">{p.type}</p>
+                          <p className="text-xs text-neutral-muted">{p.location}</p>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${getPracticeStatusStyle(p.status)}`}>{p.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* User's Files */}
+              {userDetail.files?.length > 0 && (
+                <div>
+                  <h5 className="font-semibold mb-2">File Caricati ({userDetail.files.length})</h5>
+                  <div className="flex flex-wrap gap-2 max-h-24 overflow-auto">
+                    {userDetail.files.map((f: any) => (
+                      <a key={f.id} href={f.url} target="_blank" className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200">
+                        {f.originalName}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-neutral-muted">Errore nel caricamento</p>
+          )}
+        </Modal>
+      )}
+
+      {/* Practice Detail Modal */}
+      {detailModal?.type === 'practice' && (
+        <Modal onClose={closeDetailModal} title="Dettagli Pratica">
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="font-bold">{detailModal.data.type}</h4>
+                  <p className="text-sm text-neutral-muted">{detailModal.data.propertyType}</p>
+                </div>
+                <span className={`text-xs px-2 py-1 rounded ${getPracticeStatusStyle(detailModal.data.status)}`}>{detailModal.data.status}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><span className="text-neutral-muted">Richiedente:</span> <strong>{detailModal.data.contactName}</strong></div>
+              <div><span className="text-neutral-muted">Email:</span> <strong>{detailModal.data.contactEmail}</strong></div>
+              <div><span className="text-neutral-muted">Ubicazione:</span> <strong>{detailModal.data.location}</strong></div>
+              {detailModal.data.size && <div><span className="text-neutral-muted">Superficie:</span> <strong>{detailModal.data.size} mq</strong></div>}
+              {detailModal.data.contactPhone && <div><span className="text-neutral-muted">Telefono:</span> <strong>{detailModal.data.contactPhone}</strong></div>}
+              {detailModal.data.quoteAmount && <div><span className="text-neutral-muted">Preventivo:</span> <strong>€{detailModal.data.quoteAmount.toLocaleString()}</strong></div>}
+            </div>
+            {detailModal.data.interventionDetails && (
+              <div>
+                <h5 className="font-semibold mb-1">Dettagli Intervento</h5>
+                <p className="text-sm text-neutral-muted bg-white border rounded p-2">{detailModal.data.interventionDetails}</p>
+              </div>
+            )}
+            <div className="flex gap-4 text-sm">
+              <span className={detailModal.data.isVincolato ? 'text-orange-600' : 'text-neutral-muted'}>
+                {detailModal.data.isVincolato ? '⚠️ Immobile Vincolato' : 'Non Vincolato'}
+              </span>
+              <span className={detailModal.data.hasOldPermits ? 'text-blue-600' : 'text-neutral-muted'}>
+                {detailModal.data.hasOldPermits ? '📄 Ha Permessi Precedenti' : 'Senza Permessi Precedenti'}
+              </span>
+            </div>
+            {detailModal.data.files?.length > 0 && (
+              <div>
+                <h5 className="font-semibold mb-2">File Allegati</h5>
+                <div className="flex flex-wrap gap-2">
+                  {detailModal.data.files.map((f: any) => (
+                    <a key={f.id} href={f.url} target="_blank" className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100">
+                      {f.originalName}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Proposal Detail Modal */}
+      {detailModal?.type === 'proposal' && (
+        <Modal onClose={closeDetailModal} title="Dettagli Proposta">
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center gap-3">
+                {detailModal.data.architect?.avatarUrl && <img src={detailModal.data.architect.avatarUrl} className="w-12 h-12 rounded-full" />}
+                <div>
+                  <h4 className="font-bold">{detailModal.data.architect?.name}</h4>
+                  <p className="text-sm text-neutral-muted">{detailModal.data.architect?.email}</p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h5 className="font-semibold mb-1">Concorso</h5>
+              <p className="text-sm">{detailModal.data.contest?.title}</p>
+              <p className="text-xs text-neutral-muted">Cliente: {detailModal.data.contest?.client?.name}</p>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-neutral-muted">Stato:</span>
+              <span className={`text-xs px-2 py-1 rounded ${getProposalStatusStyle(detailModal.data.status)}`}>{detailModal.data.status}</span>
+            </div>
+            {detailModal.data.description && (
+              <div>
+                <h5 className="font-semibold mb-1">Descrizione</h5>
+                <p className="text-sm text-neutral-muted bg-white border rounded p-2">{detailModal.data.description}</p>
+              </div>
+            )}
+            {detailModal.data.feedback && (
+              <div>
+                <h5 className="font-semibold mb-1">Feedback</h5>
+                <p className="text-sm text-neutral-muted bg-yellow-50 border border-yellow-200 rounded p-2">{detailModal.data.feedback}</p>
+              </div>
+            )}
+            {detailModal.data.files?.length > 0 && (
+              <div>
+                <h5 className="font-semibold mb-2">Elaborati ({detailModal.data.files.length})</h5>
+                <div className="space-y-2">
+                  {detailModal.data.files.map((f: any) => (
+                    <a key={f.id} href={f.url} target="_blank" className="flex items-center gap-2 text-sm bg-blue-50 text-blue-700 px-3 py-2 rounded hover:bg-blue-100">
+                      <FileText size={16} />
+                      {f.originalName}
+                      <span className="text-xs text-blue-500 ml-auto">{(f.size / 1024).toFixed(0)} KB</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-neutral-muted">Inviata il {new Date(detailModal.data.submittedAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          </div>
+        </Modal>
+      )}
+
+      {/* Payment Detail Modal */}
+      {detailModal?.type === 'payment' && (
+        <Modal onClose={closeDetailModal} title="Dettagli Pagamento">
+          <div className="space-y-4">
+            <div className="bg-gray-50 p-4 rounded-lg text-center">
+              <p className="text-3xl font-bold font-mono">€{detailModal.data.amount?.toLocaleString()}</p>
+              <span className={`text-xs px-2 py-1 rounded ${getPaymentStatusStyle(detailModal.data.status)}`}>{detailModal.data.status}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><span className="text-neutral-muted">ID:</span> <strong className="font-mono text-xs">{detailModal.data.id}</strong></div>
+              <div><span className="text-neutral-muted">Provider:</span> <strong>{detailModal.data.provider}</strong></div>
+              <div><span className="text-neutral-muted">Utente:</span> <strong>{detailModal.data.user?.name}</strong></div>
+              <div><span className="text-neutral-muted">Email:</span> <strong>{detailModal.data.user?.email}</strong></div>
+            </div>
+            <div>
+              <h5 className="font-semibold mb-1">Concorso</h5>
+              <p className="text-sm">{detailModal.data.contest?.title}</p>
+            </div>
+            <div className="text-xs text-neutral-muted">
+              <p>Creato: {new Date(detailModal.data.createdAt).toLocaleDateString('it-IT')}</p>
+              {detailModal.data.paidAt && <p>Pagato: {new Date(detailModal.data.paidAt).toLocaleDateString('it-IT')}</p>}
+            </div>
+          </div>
         </Modal>
       )}
 
@@ -794,18 +1170,21 @@ const DataTable: React.FC<{ columns: string[]; data: any[]; renderRow: (item: an
   </div>
 );
 
-const Modal: React.FC<{ onClose: () => void; title: string; children: React.ReactNode }> = ({ onClose, title, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center">
-    <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-    <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-auto">
-      <div className="flex items-center justify-between p-4 border-b">
-        <h3 className="font-bold text-lg">{title}</h3>
-        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+const Modal: React.FC<{ onClose: () => void; title: string; children: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' }> = ({ onClose, title, children, size = 'md' }) => {
+  const sizeClasses = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className={`relative bg-white rounded-xl shadow-2xl w-full ${sizeClasses[size]} mx-4 max-h-[90vh] overflow-auto`}>
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="font-bold text-lg">{title}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+        </div>
+        <div className="p-4">{children}</div>
       </div>
-      <div className="p-4">{children}</div>
     </div>
-  </div>
-);
+  );
+};
 
 const RoleBadge: React.FC<{ role: string }> = ({ role }) => {
   const styles: Record<string, string> = { CLIENT: 'bg-blue-100 text-blue-800', ARCHITECT: 'bg-green-100 text-green-800', ENGINEER: 'bg-orange-100 text-orange-800', ADMIN: 'bg-red-100 text-red-800' };
