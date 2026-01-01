@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '../components/Button';
-import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Loader2, X, FileText, Image, CheckCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Wand2, UploadCloud, Check, Home, Store, Building, Palette, Trees, Lightbulb, Loader2, X, FileText, Image, CheckCircle, PartyPopper, Clock, Eye } from 'lucide-react';
 import { apiFetch, isLoggedIn } from '../utils/api';
 
 interface UploadedFile {
@@ -23,6 +23,7 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [publishedContest, setPublishedContest] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     category: '',
@@ -34,9 +35,8 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
     deadline: ''
   });
 
-  // Increased total steps to 6 to include Style Selector
   const totalSteps = 6;
-  const progress = (step / totalSteps) * 100;
+  const progress = publishedContest ? 100 : (step / totalSteps) * 100;
 
   const handleNext = () => setStep(prev => Math.min(prev + 1, totalSteps));
   const handleBack = () => setStep(prev => Math.max(prev - 1, 1));
@@ -96,7 +96,8 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
       return;
     }
 
-    onComplete();
+    // Show success page
+    setPublishedContest(data);
   };
 
   const toggleStyle = (styleId: string) => {
@@ -423,39 +424,101 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
       <div>
         <label className="block text-sm font-bold text-neutral-text mb-2">Durata del concorso</label>
         <div className="grid grid-cols-3 gap-3 mb-3">
-          {[7, 14, 21].map(days => (
-             <button key={days} className="py-2 border border-gray-200 rounded-lg hover:border-primary hover:text-primary transition-colors text-sm font-medium">
-               {days} Giorni
-             </button>
-          ))}
+          {[7, 14, 21].map(days => {
+            const targetDate = new Date();
+            targetDate.setDate(targetDate.getDate() + days);
+            const dateStr = targetDate.toISOString().split('T')[0];
+            const isSelected = formData.deadline === dateStr;
+            return (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setFormData({...formData, deadline: dateStr})}
+                className={`py-2 border rounded-lg transition-colors text-sm font-medium ${
+                  isSelected
+                    ? 'border-primary bg-primary text-white'
+                    : 'border-gray-200 hover:border-primary hover:text-primary'
+                }`}
+              >
+                {days} Giorni
+              </button>
+            );
+          })}
         </div>
-        <input 
-          type="date" 
+        <input
+          type="date"
           className="w-full p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-primary-light/30 outline-none"
           value={formData.deadline}
           onChange={e => setFormData({...formData, deadline: e.target.value})}
+          min={new Date().toISOString().split('T')[0]}
         />
       </div>
     </div>
   );
 
+  const categoryLabels: Record<string, string> = {
+    'residential': 'Residenziale',
+    'commercial': 'Commerciale',
+    'office': 'Uffici',
+    'interior': 'Interior Design',
+    'landscape': 'Esterno',
+    'concept': 'Concept',
+  };
+
+  const formatDeadline = (dateStr: string) => {
+    if (!dateStr) return 'Non specificata';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
   const renderStep6 = () => (
     <div className="animate-fade-in">
       <h2 className="text-2xl font-display font-bold mb-6 text-neutral-text">Riepilogo Finale</h2>
-      
+
       <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-lg mb-8 space-y-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-secondary"></div>
-        
+
         <div className="flex justify-between pb-4 border-b border-gray-100">
           <span className="text-neutral-muted">Progetto</span>
           <span className="font-medium text-right">{formData.title || 'Nuovo Progetto'}</span>
         </div>
-        
+
+        <div className="flex justify-between pb-4 border-b border-gray-100">
+          <span className="text-neutral-muted">Categoria</span>
+          <span className="font-medium text-right">{categoryLabels[formData.category] || 'Non specificata'}</span>
+        </div>
+
         {formData.styles.length > 0 && (
           <div className="flex justify-between pb-4 border-b border-gray-100">
             <span className="text-neutral-muted">Stile</span>
-            <div className="flex gap-1 justify-end">
+            <div className="flex gap-1 justify-end flex-wrap">
               {formData.styles.map(s => <span key={s} className="text-xs bg-gray-100 px-2 py-1 rounded capitalize">{s}</span>)}
+            </div>
+          </div>
+        )}
+
+        {formData.location && (
+          <div className="flex justify-between pb-4 border-b border-gray-100">
+            <span className="text-neutral-muted">Località</span>
+            <span className="font-medium text-right">{formData.location}</span>
+          </div>
+        )}
+
+        <div className="flex justify-between pb-4 border-b border-gray-100">
+          <span className="text-neutral-muted">Scadenza</span>
+          <span className="font-medium text-right">{formatDeadline(formData.deadline)}</span>
+        </div>
+
+        {uploadedFiles.length > 0 && (
+          <div className="pb-4 border-b border-gray-100">
+            <span className="text-neutral-muted block mb-2">File allegati ({uploadedFiles.length})</span>
+            <div className="flex flex-wrap gap-2">
+              {uploadedFiles.map(file => (
+                <span key={file.id} className="text-xs bg-gray-100 px-2 py-1 rounded flex items-center gap-1">
+                  {file.mimeType.startsWith('image/') ? <Image size={12} /> : <FileText size={12} />}
+                  {file.filename.length > 20 ? file.filename.substring(0, 17) + '...' : file.filename}
+                </span>
+              ))}
             </div>
           </div>
         )}
@@ -464,7 +527,7 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
           <span className="text-neutral-muted">Premio Vincitore</span>
           <span className="font-bold text-right font-mono text-lg text-functional-success">€{Number(formData.budget).toLocaleString()}</span>
         </div>
-        
+
         <div className="flex justify-between items-center pt-2">
           <span className="font-bold text-neutral-text text-lg">Totale (IVA incl.)</span>
           <span className="text-2xl font-bold text-primary">€{(Number(formData.budget) * 1.22).toLocaleString()}</span>
@@ -480,6 +543,81 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
     </div>
   );
 
+  const renderSuccessPage = () => (
+    <div className="animate-fade-in text-center py-8">
+      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+        <PartyPopper size={48} className="text-green-600" />
+      </div>
+
+      <h2 className="text-3xl font-display font-bold mb-4 text-neutral-text">
+        Concorso Pubblicato!
+      </h2>
+
+      <p className="text-lg text-neutral-muted mb-8 max-w-md mx-auto">
+        Il tuo concorso "<span className="font-semibold text-neutral-text">{formData.title}</span>" è stato inviato con successo.
+      </p>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-8 max-w-md mx-auto">
+        <div className="flex items-center gap-3 mb-3">
+          <Clock size={24} className="text-amber-600" />
+          <h3 className="font-bold text-amber-800">In attesa di approvazione</h3>
+        </div>
+        <p className="text-sm text-amber-700 text-left">
+          Il nostro team verificherà il tuo concorso entro <strong>24 ore</strong>.
+          Riceverai una notifica quando sarà approvato e visibile agli architetti.
+        </p>
+      </div>
+
+      <div className="bg-gray-50 rounded-xl p-6 mb-8 max-w-md mx-auto">
+        <h4 className="font-bold text-neutral-text mb-4">Cosa succede ora?</h4>
+        <div className="space-y-3 text-left">
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">1</div>
+            <p className="text-sm text-neutral-muted">Il team verifica che il brief sia completo e chiaro</p>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">2</div>
+            <p className="text-sm text-neutral-muted">Il concorso viene pubblicato e notificato agli architetti</p>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">3</div>
+            <p className="text-sm text-neutral-muted">Ricevi le proposte e scegli il vincitore</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <Button onClick={onComplete} className="min-w-[180px]">
+          <Eye size={18} className="mr-2" />
+          Vai alla Dashboard
+        </Button>
+        <Button variant="secondary" onClick={onCancel} className="min-w-[180px]">
+          Torna alla Home
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Show success page if contest was published
+  if (publishedContest) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-3xl">
+        <div className="mb-8">
+          <div className="flex justify-between text-sm font-medium text-neutral-muted mb-2">
+            <span>Completato!</span>
+            <span className="text-green-600 font-bold">100%</span>
+          </div>
+          <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-green-500 to-green-400 w-full" />
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-6 md:p-10 shadow-xl border border-gray-100">
+          {renderSuccessPage()}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       {/* Stepper Header */}
@@ -489,7 +627,7 @@ export const LaunchWizard: React.FC<WizardProps> = ({ onComplete, onCancel, onLo
           <span className="text-primary font-bold">{Math.round(progress)}% Completato</span>
         </div>
         <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(30,58,95,0.3)]"
             style={{ width: `${progress}%` }}
           />

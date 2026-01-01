@@ -181,6 +181,24 @@ async function createContest(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Notify admins about new contest pending approval
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    });
+
+    if (admins.length > 0) {
+      await prisma.notification.createMany({
+        data: admins.map(admin => ({
+          userId: admin.id,
+          type: 'SYSTEM',
+          title: 'Nuovo concorso da approvare',
+          message: `Il concorso "${title}" è in attesa di approvazione.`,
+          link: `/admin?contest=${contest.id}`,
+        })),
+      });
+    }
+
     return res.status(201).json(contest);
   } catch (error) {
     console.error('Create contest error:', error);

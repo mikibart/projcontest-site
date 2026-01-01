@@ -744,15 +744,19 @@ const ProposalStatusBadge: React.FC<{ status: string }> = ({ status }) => {
 const ContestStatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const styles: Record<string, string> = {
     DRAFT: 'bg-gray-100 text-gray-800',
+    PENDING_APPROVAL: 'bg-amber-100 text-amber-800',
     OPEN: 'bg-green-100 text-green-800',
     EVALUATING: 'bg-yellow-100 text-yellow-800',
     CLOSED: 'bg-blue-100 text-blue-800',
+    HIDDEN: 'bg-red-100 text-red-800',
   };
   const labels: Record<string, string> = {
     DRAFT: 'Bozza',
+    PENDING_APPROVAL: 'In attesa approvazione',
     OPEN: 'Aperto',
     EVALUATING: 'In valutazione',
     CLOSED: 'Chiuso',
+    HIDDEN: 'Nascosto',
   };
   return (
     <span className={`px-3 py-1 rounded-full text-xs font-medium ${styles[status] || styles.DRAFT}`}>
